@@ -82,3 +82,4 @@ temp/
 # Local environment files
 .env
 .env.local
+.mcp.json
