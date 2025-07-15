@@ -28,6 +28,7 @@
           inherit system overlays;
           crossSystem = nixpkgs.lib.systems.examples.aarch64-multiplatform;
         };
+        sandboxfs = pkgs.sandboxfs;
       in
       with pkgs;
       {
@@ -45,6 +46,12 @@
             {
               name = "gralde";
               package = gradle_7;
+            }
+          ] ++ pkgs.lib.optionals (pkgs.system == "x86_64-darwin" || pkgs.system == "aarch64-darwin") [
+            {
+              name = "sandboxfs";
+              package = sandboxfs;
+              help = "Sandboxfs for MacOS FUSE";
             }
           ];
           imports = [ typelevel-nix.typelevelShell ];
