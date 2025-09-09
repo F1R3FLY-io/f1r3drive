@@ -53,7 +53,7 @@ public class F1R3DriveTestFixture {
     protected static final File UNLOCKED_WALLET_DIR_2 = new File(MOUNT_POINT_FILE, REV_WALLET_2);
 
     public static final DockerImageName F1R3FLY_IMAGE = DockerImageName.parse(
-        "ghcr.io/f1r3fly-io/rnode:latest"
+        "f1r3flyindustries/f1r3fly-scala-node:latest"
     );
 
     protected static GenericContainer<?> f1r3flyBoot;
