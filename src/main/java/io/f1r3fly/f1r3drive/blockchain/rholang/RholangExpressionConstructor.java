@@ -243,36 +243,7 @@ public class RholangExpressionConstructor {
             .toString();
     }
 
-    public static @NotNull byte[] parseBytes(@NotNull List<RhoTypes.Par> pars) {
-        RhoTypes.Par par = pars.get(pars.size() - 1);
-        int exprsCount = par.getExprsCount() - 1;
-        if (exprsCount < 0) {
-            throw new IllegalArgumentException("Empty channel data");
-        }
 
-        return par.getExprs(exprsCount).getGByteArray().toByteArray();
-    }
-
-    public static @NotNull ChannelData parseChannelData(@NotNull List<RhoTypes.Par> pars) throws IllegalArgumentException {
-        if (pars.isEmpty()) {
-            throw new IllegalArgumentException("Empty channel data");
-        }
-        RhoTypes.Par par = pars.get(pars.size() - 1);
-        int exprsCount = par.getExprsCount() - 1;
-        if (exprsCount < 0) {
-            throw new IllegalArgumentException("Empty channel data");
-        }
-
-        RhoTypes.Expr expr = par.getExprs(exprsCount);
-        
-        if (!expr.hasEMapBody()) {
-            throw new IllegalArgumentException("Expression is not an EMap");
-        }
-
-        List<RhoTypes.KeyValuePair> keyValues = expr.getEMapBody().getKvsList();
-
-        return buildChannelDataFromKeyValues(keyValues);
-    }
 
     /**
      * Processes a list of key-value pairs and converts them into ChannelData
@@ -419,17 +390,31 @@ public class RholangExpressionConstructor {
             .toString();
     }
 
+
     public static String readFromChannel(String channelName) {
         // output looks like: new return in { for (@v <<- @"path"){ return!(v) } }
         return new StringBuilder()
             .append("new return in {")
-            .append("for (@v <<- @\"")
+            .append("for (@v <= @\"")
             .append(channelName)
             .append("\"){")
             .append("return!(v)")
             .append("}")
             .append("}")
             .toString();
+    }
+
+    /**
+     * Extract bytes from RhoTypes.Expr (equivalent to parseBytes but for exploratory deploy results)
+     * 
+     * @param expr The exploratory deploy result expression
+     * @return Byte array extracted from the expression
+     */
+    public static @NotNull byte[] parseExploratoryDeployBytes(@NotNull RhoTypes.Expr expr) {
+        if (!expr.hasGByteArray()) {
+            throw new IllegalArgumentException("Expression does not contain byte array");
+        }
+        return expr.getGByteArray().toByteArray();
     }
     
     /**

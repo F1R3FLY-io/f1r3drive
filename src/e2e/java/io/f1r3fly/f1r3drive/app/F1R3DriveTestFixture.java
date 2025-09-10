@@ -294,7 +294,17 @@ public class F1R3DriveTestFixture {
         if (f1r3DriveFuse == null)
             throw new IllegalStateException("f1r3drive is not initialized");
 
+        if (f1R3FlyBlockchainClient == null)
+            throw new IllegalStateException("f1R3FlyBlockchainClient is not initialized");
+
         f1r3DriveFuse.waitOnBackgroundThread();
+
+        try {
+            // Wait for validator and observer to have the same last block
+            f1R3FlyBlockchainClient.waitForNodesSynchronization();
+        } catch (io.f1r3fly.f1r3drive.errors.F1r3DriveError e) {
+            throw new RuntimeException("Error waiting for nodes synchronization", e);
+        }
     }
 
     protected static void remount() {

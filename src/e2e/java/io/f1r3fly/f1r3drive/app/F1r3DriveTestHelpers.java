@@ -11,13 +11,13 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class F1r3DriveTestHelpers extends F1R3DriveTestFixture {
+
 
     public static @NotNull byte[] getFileContentFromShardDirectly(File file) {
         try {
@@ -34,8 +34,9 @@ public class F1r3DriveTestHelpers extends F1R3DriveTestFixture {
             Integer[] sortedKeys = dirOrFile.otherChunks().keySet().stream().sorted().toArray(Integer[]::new);
             for (Integer key : sortedKeys) {
                 String subChannel = dirOrFile.otherChunks().get(key);
-                List<RhoTypes.Par> data = f1R3FlyBlockchainClient.findDataByName(subChannel);
-                byte[] chunk = RholangExpressionConstructor.parseBytes(data);
+                String rholangCode = RholangExpressionConstructor.readFromChannel(subChannel);
+                RhoTypes.Expr result = f1R3FlyBlockchainClient.exploratoryDeploy(rholangCode);
+                byte[] chunk = RholangExpressionConstructor.parseExploratoryDeployBytes(result);
                 outputStream.write(chunk);
             }
 
@@ -68,17 +69,18 @@ public class F1r3DriveTestHelpers extends F1R3DriveTestFixture {
         // wait on background deployments
         waitOnBackgroundDeployments();
 
-        List<RhoTypes.Par> fileData = null;
+        RhoTypes.Expr result = null;
         try {
-            fileData = f1R3FlyBlockchainClient.findDataByName(fileNameAtShard);
-        } catch (NoDataByPath e) {
-            throw new RuntimeException(e);
+            String rholangCode = RholangExpressionConstructor.readFromChannel(fileNameAtShard);
+            result = f1R3FlyBlockchainClient.exploratoryDeploy(rholangCode);
+        } catch (F1r3DriveError e) {
+            throw new RuntimeException(new NoDataByPath(fileNameAtShard, "", e));
         }
 
-        assertFalse(fileData.isEmpty(), "Chanel data %s should be not empty".formatted(fileNameAtShard));
+        assertNotNull(result, "Channel data %s should be not null".formatted(fileNameAtShard));
 
-        // 2. Parse Chanel value as a map
-        return RholangExpressionConstructor.parseChannelData(fileData);
+        // 2. Parse Channel value as a map
+        return RholangExpressionConstructor.parseExploratoryDeployResult(result);
     }
 
     public static boolean isWalletDirectory(File dir) {
@@ -117,9 +119,9 @@ public class F1r3DriveTestHelpers extends F1R3DriveTestFixture {
 
         waitOnBackgroundDeployments();
 
-        List<RhoTypes.Par> pars = f1R3FlyBlockchainClient.findDataByName(newRhoChanel);
-        RhoTypes.Par first = pars.get(0);
-        assertEquals(first.getExprsList().get(0).getGInt(), chanelValue,
+        String rholangCode = RholangExpressionConstructor.readFromChannel(newRhoChanel);
+        RhoTypes.Expr result = f1R3FlyBlockchainClient.exploratoryDeploy(rholangCode);
+        assertEquals(result.getGInt(), chanelValue,
             "Deployed data should be equal to written data");
     }
 
@@ -136,9 +138,9 @@ public class F1r3DriveTestHelpers extends F1R3DriveTestFixture {
         Files.writeString(file.toPath(), rhoCode, StandardCharsets.UTF_8);
 
         waitOnBackgroundDeployments();
-        List<RhoTypes.Par> pars = f1R3FlyBlockchainClient.findDataByName(newRhoChanel);
-        RhoTypes.Par first = pars.get(0);
-        assertEquals(first.getExprsList().get(0).getGInt(), chanelValue,
+        String rholangCode = RholangExpressionConstructor.readFromChannel(newRhoChanel);
+        RhoTypes.Expr result = f1R3FlyBlockchainClient.exploratoryDeploy(rholangCode);
+        assertEquals(result.getGInt(), chanelValue,
             "Deployed data should be equal to written data");
     }
 

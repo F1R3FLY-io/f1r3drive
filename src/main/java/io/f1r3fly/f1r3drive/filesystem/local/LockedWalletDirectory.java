@@ -9,7 +9,6 @@ import io.f1r3fly.f1r3drive.errors.NoDataByPath;
 import io.f1r3fly.f1r3drive.errors.OperationNotPermitted;
 import io.f1r3fly.f1r3drive.blockchain.client.F1r3flyBlockchainClient;
 import io.f1r3fly.f1r3drive.blockchain.BlockchainContext;
-import io.f1r3fly.f1r3drive.filesystem.FileSystemAction;
 import io.f1r3fly.f1r3drive.filesystem.common.Path;
 import io.f1r3fly.f1r3drive.filesystem.common.ReadOnlyDirectory;
 import io.f1r3fly.f1r3drive.filesystem.deployable.BlockchainDirectory;
@@ -19,13 +18,11 @@ import io.f1r3fly.f1r3drive.filesystem.deployable.UnlockedWalletDirectory;
 import io.f1r3fly.f1r3drive.blockchain.rholang.RholangExpressionConstructor;
 import io.f1r3fly.f1r3drive.filesystem.utils.PathUtils;
 
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rhoapi.RhoTypes;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -118,9 +115,11 @@ public class LockedWalletDirectory extends AbstractLocalPath implements ReadOnly
     public Path fetchDirectoryFromShard(F1r3flyBlockchainClient f1R3FlyBlockchainClient, String absolutePath,
             String name, BlockchainDirectory parent) throws NoDataByPath {
         try {
-            List<RhoTypes.Par> pars = f1R3FlyBlockchainClient.findDataByName(absolutePath);
+            // Use exploratory deploy with rholang code to read from channel
+            String rholangCode = RholangExpressionConstructor.readFromChannel(absolutePath);
+            RhoTypes.Expr result = f1R3FlyBlockchainClient.exploratoryDeploy(rholangCode);
 
-            RholangExpressionConstructor.ChannelData fileOrDir = RholangExpressionConstructor.parseChannelData(pars);
+            RholangExpressionConstructor.ChannelData fileOrDir = RholangExpressionConstructor.parseExploratoryDeployResult(result);
 
             if (fileOrDir.isDir()) {
                 FetchedDirectory dir = new FetchedDirectory(this.getBlockchainContext(), name, parent, fileOrDir.lastUpdated());
@@ -151,8 +150,9 @@ public class LockedWalletDirectory extends AbstractLocalPath implements ReadOnly
 
                     for (Integer chunkNumber : sortedChunkNumbers) {
                         String subChannel = fileOrDir.otherChunks().get(chunkNumber);
-                        List<RhoTypes.Par> subChannelPars = f1R3FlyBlockchainClient.findDataByName(subChannel);
-                        byte[] data = RholangExpressionConstructor.parseBytes(subChannelPars);
+                        String subChannelRholangCode = RholangExpressionConstructor.readFromChannel(subChannel);
+                        RhoTypes.Expr subChannelResult = f1R3FlyBlockchainClient.exploratoryDeploy(subChannelRholangCode);
+                        byte[] data = RholangExpressionConstructor.parseExploratoryDeployBytes(subChannelResult);
 
                         offset = offset + file.initFromBytes(data, offset);
                     }
@@ -165,6 +165,9 @@ public class LockedWalletDirectory extends AbstractLocalPath implements ReadOnly
         } catch (NoDataByPath e) {
             logger.info("No data found for path: {}", absolutePath);
             throw e;
+        } catch (io.f1r3fly.f1r3drive.errors.F1r3DriveError e) {
+            logger.info("No data found for path: {}", absolutePath);
+            throw new NoDataByPath(absolutePath, "", e);
         } catch (Throwable e) {
             logger.error("Error fetching directory from shard for path: {}", absolutePath, e);
             throw new RuntimeException("Failed to fetch directory data for " + absolutePath, e);
