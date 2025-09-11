@@ -6,12 +6,12 @@
 
 Run shard locally:
 ```sh
-docker-compose -f ./docker-compose.yml up -d
+docker-compose -f ./local-shard/shard-without-autoprpose.yml up -d
 ```
 
 Wait for "Listening for traffic" logs:
 ```sh
-docker-compose -f ./docker-compose.yml logs
+docker-compose -f ./local-shard/shard-without-autoprpose.yml logs
 ```
 Logs should be like: 
 ```text
@@ -19,8 +19,8 @@ Listening for traffic on rnode://cfae6a0c885d734908f8c756fb0519d2df7fbcec@178.15
 ```
 
 Local shard will be configured with the following configurations:
-- [REV Addresses (wallets.txt)](./data/genesis/wallets.txt)
-- nodes (see [docker-compose.yml](docker-compose.yml) for Node configs): 
+- [REV Addresses (wallets.txt)](./local-shard/data/genesis/wallets.txt)
+- nodes (see [local-shard/shard-without-autoprpose.yml](local-shard/shard-without-autoprpose.yml) for Node configs): 
   - bootstrap node: `localhost:40402`
   - observer node: `localhost:40412`
 
@@ -28,7 +28,7 @@ Local shard will be configured with the following configurations:
 
 1. Download the latest `f1r3drive-*.jar` from the [GitHub Releases page](https://github.com/f1r3fly-io/F1R3FLYFS/releases).
 
-2. Run F1r3Drive app with REV Address and Private key. That must be assosiated with some REV address from [wallets.txt](./data/genesis//wallets.txt):
+2. Run F1r3Drive app with REV Address and Private key. That must be assosiated with some REV address from [wallets.txt](./local-shard/data/genesis/wallets.txt):
 
 **Manual Propose Option:**
 - `--manual-propose true`: Manual deployment flow with propose and finalization waiting (for development/testing only)
@@ -92,7 +92,7 @@ ps aux | grep java | grep -v grep | awk '{print $2}' | xargs kill -9
 sudo diskutil umount force ~/demo-f1r3drive
 
 # stop Shard
-docker-compose -f docker-compose.yml down
+docker-compose -f local-shard/shard-without-autoprpose.yml down
 
 # ~/demo-f1r3drive has to be empty folder
 # delete ~/demo-f1r3drive before running the next time

@@ -81,7 +81,7 @@ public class F1R3DriveTestFixture {
         String bootAlias = "f1r3fly-boot";
         String observerAlias = "f1r3fly-observer";
         f1r3flyBoot = new GenericContainer<>(F1R3FLY_IMAGE)
-            .withFileSystemBind("data/", "/var/lib/rnode/", BindMode.READ_WRITE)
+            .withFileSystemBind("local-shard/data/", "/var/lib/rnode/", BindMode.READ_WRITE)
             .withExposedPorts(GRPC_PORT, PROTOCOL_PORT, DISCOVERY_PORT)
             .withCommand("run -s --no-upnp --allow-private-addresses"
                 + " --host " + bootAlias
@@ -103,7 +103,7 @@ public class F1R3DriveTestFixture {
         log.info("Using bootstrap address: {}", f1r3flyBootAddress);
 
         f1r3flyObserver = new GenericContainer<>(F1R3FLY_IMAGE)
-            .withFileSystemBind("data/observer/", "/var/lib/rnode/", BindMode.READ_WRITE)
+            .withFileSystemBind("local-shard/data/observer/", "/var/lib/rnode/", BindMode.READ_WRITE)
             .withExposedPorts(GRPC_PORT)
             .withCommand("run -b " + f1r3flyBootAddress + " --allow-private-addresses --no-upnp" +
                 " --host " + observerAlias +
@@ -230,10 +230,10 @@ public class F1R3DriveTestFixture {
     }
 
     protected static void recreateDirectories() {
-        cleanDataDirectory("data", Arrays.asList("genesis", "node.certificate.pem", "node.key.pem"));
+        cleanDataDirectory("local-shard/data", Arrays.asList("genesis", "node.certificate.pem", "node.key.pem"));
 
         // Ensure the observer data directory exists
-        new File("data/observer").mkdirs();
+        new File("local-shard/data/observer").mkdirs();
     }
 
     protected static void forceUmountAndCleanup() {
