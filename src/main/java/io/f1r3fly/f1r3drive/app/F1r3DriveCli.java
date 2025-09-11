@@ -38,6 +38,9 @@ class F1r3DriveCli implements Callable<Integer> {
     @Option(names = {"-pk", "--private-key"}, description = "The private key of the wallet to unlock.")
     private String privateKey;
 
+    @Option(names = {"-mp", "--manual-propose"}, required = true, description = "Manual propose configuration. If true, will propose and wait for finalization. If false, will skip propose and finalization waiting.")
+    private boolean manualPropose;
+
     private F1r3DriveFuse f1r3DriveFuse;
 
 
@@ -49,7 +52,8 @@ class F1r3DriveCli implements Callable<Integer> {
             validatorHost,
             validatorPort,
             observerHost,
-            observerPort
+            observerPort,
+            manualPropose
         );
 
         f1r3DriveFuse = new F1r3DriveFuse(

@@ -1,8 +1,8 @@
 package io.f1r3fly.f1r3drive.app;
 
+import io.f1r3fly.f1r3drive.blockchain.rholang.RholangExpressionConstructor;
 import io.f1r3fly.f1r3drive.errors.F1r3DriveError;
 import io.f1r3fly.f1r3drive.errors.NoDataByPath;
-import io.f1r3fly.f1r3drive.blockchain.rholang.RholangExpressionConstructor;
 import org.jetbrains.annotations.NotNull;
 import rhoapi.RhoTypes;
 
@@ -11,6 +11,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.util.Random;
 import java.util.Set;
 
@@ -18,6 +19,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class F1r3DriveTestHelpers extends F1R3DriveTestFixture {
 
+    // Retry constants for exploratoryDeploy operations
+    private static final Duration INIT_DELAY = Duration.ofMillis(100);
+    private static final Duration MAX_DELAY = Duration.ofSeconds(5);
+    private static final int RETRIES = 10;
 
     public static @NotNull byte[] getFileContentFromShardDirectly(File file) {
         try {
@@ -70,11 +75,27 @@ public class F1r3DriveTestHelpers extends F1R3DriveTestFixture {
         waitOnBackgroundDeployments();
 
         RhoTypes.Expr result = null;
-        try {
-            String rholangCode = RholangExpressionConstructor.readFromChannel(fileNameAtShard);
-            result = f1R3FlyBlockchainClient.exploratoryDeploy(rholangCode);
-        } catch (F1r3DriveError e) {
-            throw new RuntimeException(new NoDataByPath(fileNameAtShard, "", e));
+        String rholangCode = RholangExpressionConstructor.readFromChannel(fileNameAtShard);
+
+        // Retry exploratoryDeploy with exponential backoff
+        for (int attempt = 0; attempt < RETRIES; attempt++) {
+            try {
+                result = f1R3FlyBlockchainClient.exploratoryDeploy(rholangCode);
+                break; // Success, exit retry loop
+            } catch (F1r3DriveError e) {
+                if (attempt >= RETRIES - 1) {
+                    // Last attempt failed, throw the exception
+                    throw new RuntimeException(new NoDataByPath(fileNameAtShard, "", e));
+                }
+
+                // Wait before retry with exponential backoff
+                try {
+                    Thread.sleep(Math.min(INIT_DELAY.toMillis() * (1L << attempt), MAX_DELAY.toMillis()));
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(new NoDataByPath(fileNameAtShard, "", e));
+                }
+            }
         }
 
         assertNotNull(result, "Channel data %s should be not null".formatted(fileNameAtShard));

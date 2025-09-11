@@ -42,11 +42,13 @@ public class F1r3flyBlockchainClient {
     private final DeployServiceGrpc.DeployServiceBlockingStub validatorDeployService;
     private final ProposeServiceGrpc.ProposeServiceBlockingStub validatorProposeService;
     private final DeployServiceGrpc.DeployServiceBlockingStub observerDeployService;
+    private final boolean manualPropose;
 
     public F1r3flyBlockchainClient(String validatorHost,
             int validatorPort,
             String observerHost,
-            int observerPort) {
+            int observerPort,
+            boolean manualPropose) {
         super();
 
         Security.addProvider(new Blake2bProvider());
@@ -67,6 +69,8 @@ public class F1r3flyBlockchainClient {
         this.observerDeployService = DeployServiceGrpc.newBlockingStub(observerChannel)
                 .withMaxInboundMessageSize(MAX_MESSAGE_SIZE)
                 .withMaxOutboundMessageSize(MAX_MESSAGE_SIZE);
+        
+        this.manualPropose = manualPropose;
     }
 
 
@@ -186,7 +190,7 @@ public class F1r3flyBlockchainClient {
             // Deploy
             DeployServiceV1.ExploratoryDeployResponse deployResponse = observerDeployService.exploratoryDeploy(exploratoryDeploy);
                 
-            LOGGER.debug("Exploratory deploy code {}. Response {}", rhoCode, deployResponse);
+            LOGGER.trace("Exploratory deploy code {}. Response {}", rhoCode, deployResponse);
             
             if (deployResponse.hasError()) {
                 LOGGER.debug("Exploratory deploy code {}. Error response {}", rhoCode, deployResponse.getError());
@@ -216,7 +220,7 @@ public class F1r3flyBlockchainClient {
         }
     }
 
-    public String deploy(String rhoCode, boolean useBiggerRhloPrice, String language, byte[] signingKey, long timestamp)
+    public void deploy(String rhoCode, boolean useBiggerRhloPrice, String language, byte[] signingKey, long timestamp)
             throws F1r3flyDeployError {
         try {
 
@@ -228,12 +232,18 @@ public class F1r3flyBlockchainClient {
 
             LOGGER.trace("Language parameter is skipped for now: {}. Using default language: {}", language, RHOLANG);
 
+            // Get last finalized block from validator to set validAfterBlockNumber
+            DeployServiceCommon.BlockInfo lastBlock = getLastFinalizedBlockFromValidator();
+            long validAfterBlockNumber = lastBlock.getBlockInfo().getBlockNumber();
+            LOGGER.debug("Setting validAfterBlockNumber to: {}", validAfterBlockNumber);
+
             // Make deployment
             CasperMessage.DeployDataProto deployment = CasperMessage.DeployDataProto.newBuilder()
                     .setTerm(rhoCode)
                     .setTimestamp(timestamp)
                     .setPhloPrice(1)
                     .setPhloLimit(phloLimit)
+                    .setValidAfterBlockNumber(validAfterBlockNumber)
                     .setShardId("root")
                     // .setLanguage(language)
                     .build();
@@ -245,6 +255,12 @@ public class F1r3flyBlockchainClient {
             DeployServiceV1.DeployResponse deployResponse = validatorDeployService.doDeploy(signed);
             if (deployResponse.hasError()) {
                 throw new F1r3flyDeployError(rhoCode, gatherErrors(deployResponse.getError()));
+            }
+
+            // If manual propose is disabled, just return after deploying
+            if (!manualPropose) {
+                LOGGER.debug("Manual propose is disabled, skipping propose and finalization waiting");
+                return;
             }
 
             String deployResult = deployResponse.getResult();
@@ -282,7 +298,8 @@ public class F1r3flyBlockchainClient {
                     }
                     
                     if (isFinalizedResponse.getIsFinalized()) {
-                        return blockHash;
+                        LOGGER.debug("Deploy finalized successfully");
+                        return;
                     }
                     
                     // Wait before retry

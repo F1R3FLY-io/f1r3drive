@@ -3,12 +3,11 @@ package io.f1r3fly.f1r3drive.app;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import io.f1r3fly.f1r3drive.encryption.AESCipher;
-import io.f1r3fly.f1r3drive.blockchain.client.F1r3flyBlockchainClient;
-import io.f1r3fly.f1r3drive.fuse.utils.MountUtils;
-import io.f1r3fly.f1r3drive.finderextensions.client.FinderSyncExtensionServiceClient;
 import generic.FinderSyncExtensionServiceOuterClass;
-
+import io.f1r3fly.f1r3drive.blockchain.client.F1r3flyBlockchainClient;
+import io.f1r3fly.f1r3drive.encryption.AESCipher;
+import io.f1r3fly.f1r3drive.finderextensions.client.FinderSyncExtensionServiceClient;
+import io.f1r3fly.f1r3drive.fuse.utils.MountUtils;
 import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +35,7 @@ public class F1R3DriveTestFixture {
     protected static final int PROTOCOL_PORT = 40400;
     protected static final int DISCOVERY_PORT = 40404;
     protected static final String MAX_BLOCK_LIMIT = "1000";
-    protected static final int MAX_MESSAGE_SIZE = 1024 * 1024 * 1024;  // ~1G
+    protected static final int MAX_MESSAGE_SIZE = 1024 * 1024 * 1024; // ~1G
     protected static final Duration STARTUP_TIMEOUT = Duration.ofMinutes(2);
     protected static final String validatorPrivateKey = "f9854c5199bc86237206c75b25c6aeca024dccc0f55df3a553131111fd25dd85";
     protected static final Path MOUNT_POINT = new File("/tmp/f1r3drive/").toPath();
@@ -53,8 +52,7 @@ public class F1R3DriveTestFixture {
     protected static final File UNLOCKED_WALLET_DIR_2 = new File(MOUNT_POINT_FILE, REV_WALLET_2);
 
     public static final DockerImageName F1R3FLY_IMAGE = DockerImageName.parse(
-        "f1r3flyindustries/f1r3fly-scala-node:latest"
-    );
+        "f1r3flyindustries/f1r3fly-scala-node:latest");
 
     protected static GenericContainer<?> f1r3flyBoot;
     protected static String f1r3flyBootAddress;
@@ -67,6 +65,8 @@ public class F1R3DriveTestFixture {
 
     protected static F1r3DriveFuse f1r3DriveFuse;
     protected static F1r3flyBlockchainClient f1R3FlyBlockchainClient;
+
+    protected static AutoProposer autoProposer;
 
     @BeforeEach
     void setupContainers() throws InterruptedException {
@@ -97,7 +97,8 @@ public class F1R3DriveTestFixture {
         f1r3flyBoot.start(); // Manually start the container
 
         // Use container network alias for container-to-container communication
-        f1r3flyBootAddress = "rnode://17e4e1fb1540554e72dbf91abe4647b85d8bd655@" + bootAlias + "?protocol=" + PROTOCOL_PORT + "&discovery=" + DISCOVERY_PORT;
+        f1r3flyBootAddress = "rnode://17e4e1fb1540554e72dbf91abe4647b85d8bd655@" + bootAlias + "?protocol="
+            + PROTOCOL_PORT + "&discovery=" + DISCOVERY_PORT;
 
         log.info("Using bootstrap address: {}", f1r3flyBootAddress);
 
@@ -123,13 +124,16 @@ public class F1R3DriveTestFixture {
         // Wait for both containers' GRPC ports to be available
         waitForPortToOpen("localhost", f1r3flyBoot.getMappedPort(GRPC_PORT), STARTUP_TIMEOUT);
         waitForPortToOpen("localhost", f1r3flyObserver.getMappedPort(GRPC_PORT), STARTUP_TIMEOUT);
+    }
 
+    void mountF1r3Drive(boolean manualPropose) throws InterruptedException {
         new File("/tmp/cipher.key").delete(); // remove key file if exists
 
         AESCipher.init("/tmp/cipher.key"); // file doesn't exist, so new key will be generated there
         f1R3FlyBlockchainClient = new F1r3flyBlockchainClient(
             "localhost", f1r3flyBoot.getMappedPort(GRPC_PORT),
-            "localhost", f1r3flyObserver.getMappedPort(GRPC_PORT));
+            "localhost", f1r3flyObserver.getMappedPort(GRPC_PORT),
+            manualPropose); // Enable manual propose for tests to test the full flow
         f1r3DriveFuse = new F1r3DriveFuse(f1R3FlyBlockchainClient);
 
         forceUmountAndCleanup(); // cleanup before mount
@@ -143,8 +147,24 @@ public class F1R3DriveTestFixture {
         Thread.sleep(1000);
     }
 
+    void startAutoProposer() {
+        autoProposer = new AutoProposer(
+            "localhost", f1r3flyBoot.getMappedPort(GRPC_PORT),
+            PRIVATE_KEY_2);
+
+        autoProposer.start();
+    }
+
     @AfterEach
-    void tearDownContainers() {
+    void stopAutoProposer() {
+        if (autoProposer != null) {
+            autoProposer.shutdown();
+            autoProposer = null;
+        }
+    }
+
+    @AfterEach
+    void unmountF1r3Drive() throws InterruptedException {
         try {
             if (f1r3DriveFuse != null) {
                 forceUmountAndCleanup();
@@ -155,6 +175,10 @@ public class F1R3DriveTestFixture {
             e.printStackTrace();
             // ignore
         }
+    }
+
+    @AfterEach
+    void tearDownContainers() {
         if (f1r3flyBoot != null) {
             f1r3flyBoot.stop();
             f1r3flyBoot.close();
@@ -176,7 +200,8 @@ public class F1R3DriveTestFixture {
     protected static void cleanDataDirectory(String destination, List<String> excludeList) {
         try {
             // if test fails, try to cleanup the data folder of the node manually
-            // cd data && rm -rf blockstorage dagstorage eval rspace casperbuffer deploystorage rnode.log && cd
+            // cd data && rm -rf blockstorage dagstorage eval rspace casperbuffer
+            // deploystorage rnode.log && cd
             cleanDirectoryExcept(destination, excludeList);
         } catch (IOException e) {
             e.printStackTrace();
@@ -203,7 +228,6 @@ public class F1R3DriveTestFixture {
             }
         }
     }
-
 
     protected static void recreateDirectories() {
         cleanDataDirectory("data", Arrays.asList("genesis", "node.certificate.pem", "node.key.pem"));
@@ -317,13 +341,15 @@ public class F1R3DriveTestFixture {
         }
     }
 
-    protected static void simulateUnlockWalletDirectoryAction(String revAddress, String privateKey) throws FinderSyncExtensionServiceClient.WalletUnlockException {
+    protected static void simulateUnlockWalletDirectoryAction(String revAddress, String privateKey)
+        throws FinderSyncExtensionServiceClient.WalletUnlockException {
         try (FinderSyncExtensionServiceClient client = new FinderSyncExtensionServiceClient("localhost", 54000)) {
             client.unlockWalletDirectory(revAddress, privateKey);
         }
     }
 
-    protected static void simulateChangeTokenAction(String tokenPath) throws FinderSyncExtensionServiceClient.ActionSubmissionException {
+    protected static void simulateChangeTokenAction(String tokenPath)
+        throws FinderSyncExtensionServiceClient.ActionSubmissionException {
         try (FinderSyncExtensionServiceClient client = new FinderSyncExtensionServiceClient("localhost", 54000)) {
             client.submitAction(FinderSyncExtensionServiceOuterClass.MenuActionType.CHANGE, tokenPath);
         }
@@ -348,4 +374,4 @@ public class F1R3DriveTestFixture {
 
         throw new RuntimeException("Timeout waiting for port " + host + ":" + port + " to become available");
     }
-} 
+}
