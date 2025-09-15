@@ -78,7 +78,4 @@ buildNumber.properties
 logs/
 tmp/
 temp/
-
-# Local environment files
-.env
-.env.local
+local-shard/data/

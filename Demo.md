@@ -6,12 +6,13 @@
 
 Run shard locally:
 ```sh
-docker-compose -f ./local-shard/shard-without-autoprpose.yml up -d
+cd local-shard
+docker-compose -f shard-with-autopropose.yml up -d
 ```
 
 Wait for "Listening for traffic" logs:
 ```sh
-docker-compose -f ./local-shard/shard-without-autoprpose.yml logs
+docker-compose -f shard-with-autopropose.yml logs
 ```
 Logs should be like: 
 ```text
@@ -19,10 +20,12 @@ Listening for traffic on rnode://cfae6a0c885d734908f8c756fb0519d2df7fbcec@178.15
 ```
 
 Local shard will be configured with the following configurations:
-- [REV Addresses (wallets.txt)](./local-shard/data/genesis/wallets.txt)
-- nodes (see [local-shard/shard-without-autoprpose.yml](local-shard/shard-without-autoprpose.yml) for Node configs): 
-  - bootstrap node: `localhost:40402`
-  - observer node: `localhost:40412`
+- [REV Addresses (wallets.txt)](./local-shard/genesis/wallets.txt)
+- nodes (see [local-shard/shard-with-autopropose.yml](local-shard/shard-with-autopropose.yml) for Node configs): 
+  - bootstrap node: `localhost:40412`
+  - observer node: `localhost:40442`
+
+**Note**: Make sure you have a `.env` file in the `local-shard/` directory with the required environment variables before running docker-compose.
 
 # Run F1r3Drive app
 
@@ -36,21 +39,21 @@ Local shard will be configured with the following configurations:
 
 - If you build the jar locally, run:
 ```sh
-java -jar ./build/libs/f1r3drive-0.1.0.jar ~/demo-f1r3drive \
+java -jar ./build/libs/f1r3drive-0.1.1.jar ~/demo-f1r3drive \
    --cipher-key-path ~/cipher.key \
    --validator-host localhost --validator-port 40402 \
    --observer-host localhost --observer-port 40412 \
-   --manual-propose true \
-   --rev-address 11112ZM9yrfaTrzCCbKjPbxBncjNCkMFsPqtcLFvhBf4Kqx6rpir2w --private-key a8cf01d889cc6ef3119ecbd57301036a52c41ae6e44964e098cb2aefa4598954
+   --manual-propose=false \
+   --rev-address 111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA --private-key 357cdc4201a5650830e0bc5a03299a30038d9934ba4c7ab73ec164ad82471ff9
 ```
 - If you downloaded the JAR to your `~/Downloads` folder, run:
 ```sh
-java -jar ~/Downloads/f1r3drive-0.1.0.jar ~/demo-f1r3drive \
+java -jar ~/Downloads/f1r3drive-0.1.1.jar ~/demo-f1r3drive \
    --cipher-key-path ~/cipher.key \
    --validator-host localhost --validator-port 40402 \
    --observer-host localhost --observer-port 40412 \
-   --manual-propose true \
-   --rev-address 11112ZM9yrfaTrzCCbKjPbxBncjNCkMFsPqtcLFvhBf4Kqx6rpir2w --private-key a8cf01d889cc6ef3119ecbd57301036a52c41ae6e44964e098cb2aefa4598954
+   --manual-propose=false \
+   --rev-address 111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA --private-key 357cdc4201a5650830e0bc5a03299a30038d9934ba4c7ab73ec164ad82471ff9
 ```
 
 # Demo
@@ -58,9 +61,9 @@ java -jar ~/Downloads/f1r3drive-0.1.0.jar ~/demo-f1r3drive \
 Creating a tiny file inside ~/demo-f1r3drive folder:
 
 ```sh
-echo "abc" > ~/demo-f1r3drive/11112ZM9yrfaTrzCCbKjPbxBncjNCkMFsPqtcLFvhBf4Kqx6rpir2w/demo.txt
-ls -lh ~/demo-f1r3drive/11112ZM9yrfaTrzCCbKjPbxBncjNCkMFsPqtcLFvhBf4Kqx6rpir2w/demo.txt
-cat ~/demo-f1r3drive/11112ZM9yrfaTrzCCbKjPbxBncjNCkMFsPqtcLFvhBf4Kqx6rpir2w/demo.txt
+echo "abc" > ~/demo-f1r3drive/111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA/demo.txt
+ls -lh ~/demo-f1r3drive/111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA/demo.txt
+cat ~/demo-f1r3drive/111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA/demo.txt
 ```
 
 Copy 1M file inside ~/demo-f1r3drive folder:
@@ -70,11 +73,11 @@ Copy 1M file inside ~/demo-f1r3drive folder:
 dd if=/dev/zero of=large_data.txt bs=1m count=1
 
 # copy file (use rsync for progress logs)
-cp large_data.txt ~/demo-f1r3drive/11112ZM9yrfaTrzCCbKjPbxBncjNCkMFsPqtcLFvhBf4Kqx6rpir2w/
-# OR: rsync -av --progress large_data.txt ~/demo-f1r3drive/11112ZM9yrfaTrzCCbKjPbxBncjNCkMFsPqtcLFvhBf4Kqx6rpir2w/
+cp large_data.txt ~/demo-f1r3drive/111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA/
+# OR: rsync -av --progress large_data.txt ~/demo-f1r3drive/111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA/
 
 # wait for some time, then verify the file is copied
-ls -lh ~/demo-f1r3drive/11112ZM9yrfaTrzCCbKjPbxBncjNCkMFsPqtcLFvhBf4Kqx6rpir2w/large_data.txt
+ls -lh ~/demo-f1r3drive/111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA/large_data.txt
 ```
 
 # Cleanup
@@ -92,7 +95,8 @@ ps aux | grep java | grep -v grep | awk '{print $2}' | xargs kill -9
 sudo diskutil umount force ~/demo-f1r3drive
 
 # stop Shard
-docker-compose -f local-shard/shard-without-autoprpose.yml down
+cd local-shard
+docker-compose -f shard-with-autopropose.yml down
 
 # ~/demo-f1r3drive has to be empty folder
 # delete ~/demo-f1r3drive before running the next time
