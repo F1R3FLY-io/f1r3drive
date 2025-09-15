@@ -39,7 +39,7 @@ public class F1r3DriveFuse extends FuseStubFS {
     private final String[] MOUNT_OPTIONS = {
         // refers to https://github.com/osxfuse/osxfuse/wiki/Mount-options
         "-o", "noappledouble",
-        "-o", "daemon_timeout=3600", // 1 hour timeout
+        "-o", "daemon_timeout=60", // 1 hour timeout
         "-o", "defer_permissions", // permission is not supported that, this disables the permission check from
         // Fuse side
         "-o", "local",
@@ -446,6 +446,15 @@ public class F1r3DriveFuse extends FuseStubFS {
 
     @Override
     public void umount() {
+        // Use compareAndSet to ensure only one unmount attempt (consistent with base class)
+        if (!mounted.compareAndSet(true, false)) {
+            LOGGER.debug("F1r3DriveFuse is already unmounted or being unmounted, skipping");
+            return;
+        }
+        
+        // Reset mounted flag back to true so that super.umount() can handle it properly
+        mounted.set(true);
+        
         LOGGER.debug("Called Umounting F1r3DriveFuse. Mounted: {}, filesystem {}", mounted.get(), fileSystem != null);
         try {
             LOGGER.debug("Waiting for background operations to complete before unmount...");

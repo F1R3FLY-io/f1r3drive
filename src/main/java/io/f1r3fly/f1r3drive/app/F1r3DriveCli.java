@@ -60,14 +60,22 @@ class F1r3DriveCli implements Callable<Integer> {
             f1R3FlyBlockchainClient
         );
 
-        try {
-            if (revAddress != null && privateKey != null) { 
-                f1r3DriveFuse.mountAndUnlockRootDirectory(mountPoint, true, revAddress, privateKey);
-            } else {
-                f1r3DriveFuse.mount(mountPoint, true);
+        // Add shutdown hook to ensure proper unmounting on Ctrl+C
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (f1r3DriveFuse != null) {
+                try {
+                    f1r3DriveFuse.umount();
+                } catch (Exception e) {
+                    System.err.println("Error during shutdown unmount: " + e.getMessage());
+                }
             }
-        } finally {
-            f1r3DriveFuse.umount();
+        }, "F1r3Drive-Shutdown"));
+
+        // Mount filesystem - unmounting is handled by shutdown hook
+        if (revAddress != null && privateKey != null) { 
+            f1r3DriveFuse.mountAndUnlockRootDirectory(mountPoint, true, revAddress, privateKey);
+        } else {
+            f1r3DriveFuse.mount(mountPoint, true);
         }
         return 0;
     }

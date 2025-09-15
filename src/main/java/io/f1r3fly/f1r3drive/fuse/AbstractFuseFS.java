@@ -261,9 +261,6 @@ public abstract class AbstractFuseFS implements FuseFS {
 
         final String[] args = arg;
         try {
-            if (SecurityUtils.canHandleShutdownHooks()) {
-                java.lang.Runtime.getRuntime().addShutdownHook(new Thread(this::umount));
-            }
             int res;
             if (blocking) {
                 res = execMount(args);
@@ -306,18 +303,98 @@ public abstract class AbstractFuseFS implements FuseFS {
 
     @Override
     public void umount() {
-        if (!mounted.get()) {
-            return;
+        // Use compareAndSet to ensure only one unmount attempt
+        if (!mounted.compareAndSet(true, false)) {
+            return; // Already unmounted or unmounting
         }
-        if (Platform.IS_WINDOWS) {
-            Pointer fusePointer = this.fusePointer;
-            if (fusePointer != null) {
-                libFuse.fuse_exit(fusePointer);
+        
+        boolean unmountSuccessful = false;
+        
+        try {
+            // Step 1: Try to signal FUSE to exit gracefully using stored pointer
+            try {
+                Pointer fusePtr = this.fusePointer;
+                if (fusePtr != null && libFuse != null) {
+                    libFuse.fuse_exit(fusePtr);
+                    unmountSuccessful = true;
+                    
+                    // Give FUSE some time to exit gracefully
+                    Thread.sleep(100);
+                } else {
+                    // Try to get context if pointer not available
+                    var context = libFuse != null ? libFuse.fuse_get_context() : null;
+                    if (context != null && context.fuse != null) {
+                        Pointer contextFusePtr = context.fuse.get();
+                        if (contextFusePtr != null) {
+                            libFuse.fuse_exit(contextFusePtr);
+                            unmountSuccessful = true;
+                            
+                            // Give FUSE some time to exit gracefully
+                            Thread.sleep(100);
+                        }
+                    }
+                }
+            } catch (Throwable e) {
+                // Log but don't fail - we'll try external unmount
+                System.err.println("Warning: Failed to signal FUSE exit gracefully: " + e.getMessage());
             }
-        } else {
-            MountUtils.umount(mountPoint);
+            
+            // Step 2: Try external unmount as fallback (or primary method if fuse_exit failed)
+            if (!Platform.IS_WINDOWS && mountPoint != null) {
+                try {
+                    boolean externalUnmountSuccess = MountUtils.umount(mountPoint);
+                    if (externalUnmountSuccess) {
+                        unmountSuccessful = true;
+                    } else {
+                        System.err.println("Warning: External unmount reported failure");
+                    }
+                } catch (Throwable e) {
+                    System.err.println("Warning: External unmount failed: " + e.getMessage());
+                }
+            }
+            
+            // Step 3: Final verification - check if still mounted
+            if (!unmountSuccessful && mountPoint != null) {
+                // Last resort: force unmount using system commands
+                try {
+                    if (Platform.IS_MAC) {
+                        ProcessBuilder pb = new ProcessBuilder("diskutil", "unmount", "force", mountPoint.toString());
+                        Process process = pb.start();
+                        int exitCode = process.waitFor();
+                        if (exitCode == 0) {
+                            unmountSuccessful = true;
+                        } else {
+                            // Check if unmount failed because it's already unmounted
+                            ProcessBuilder checkPb = new ProcessBuilder("mount");
+                            Process checkProcess = checkPb.start();
+                            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                                    new java.io.InputStreamReader(checkProcess.getInputStream()))) {
+                                boolean stillMounted = reader.lines()
+                                    .anyMatch(line -> line.contains(mountPoint.toString()));
+                                if (!stillMounted) {
+                                    unmountSuccessful = true; // It's actually unmounted
+                                }
+                            }
+                        }
+                    }
+                } catch (Throwable e) {
+                    System.err.println("Warning: Force unmount failed: " + e.getMessage());
+                }
+            }
+            
+        } catch (Throwable e) {
+            System.err.println("Error during unmount process: " + e.getMessage());
+        } finally {
+            // Clean up resources regardless of unmount success
+            this.fusePointer = null;
+            this.mountPoint = null;
+            this.mountName = null;
+            
+            if (!unmountSuccessful) {
+                System.err.println("Warning: Unmount may not have completed successfully. " +
+                    "You may need to manually unmount using: diskutil unmount force <mountpoint>");
+            }
         }
-        mounted.set(false);
     }
 
 }
