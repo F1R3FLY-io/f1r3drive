@@ -18,6 +18,7 @@ services:
         "run",
         "--host=$BOOTSTRAP_HOST",
         "--allow-private-addresses",
+        "--bootstrap=rnode://$BOOTSTRAP_NODE_ID@$BOOTSTRAP_HOST?protocol=40400&discovery=40404",
         "--validator-private-key=$BOOTSTRAP_PRIVATE_KEY",
         "--no-upnp",
         "-s",
