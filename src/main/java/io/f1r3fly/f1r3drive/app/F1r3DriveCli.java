@@ -14,6 +14,13 @@ import java.util.concurrent.Callable;
     description = "A FUSE filesystem based on the F1r3fly blockchain.")
 class F1r3DriveCli implements Callable<Integer> {
 
+    private static final String[] MOUNT_OPTIONS = {
+        // Linux-compatible FUSE mount options
+                "-o", "fsname=f1r3drive",
+                "-o", "noatime",
+                "-s"  // Single-threaded mode for better FUSE2 compatibility and safety
+    };
+
     @Option(names = {"-h", "--validator-host"}, description = "Host of the F1r3fly blockchain internal gRPC API to connect to. Defaults to localhost.")
     private String validatorHost = "localhost";
 
@@ -40,6 +47,9 @@ class F1r3DriveCli implements Callable<Integer> {
 
     @Option(names = {"-mp", "--manual-propose"}, required = true, description = "Manual propose configuration. If true, will propose and wait for finalization. If false, will skip propose and finalization waiting.")
     private boolean manualPropose;
+
+    @Option(names = {"-d", "--debug"}, description = "Enable FUSE debug mode for verbose logging of filesystem operations.")
+    private boolean fuseDebug = false;
 
     private F1r3DriveFuse f1r3DriveFuse;
 
@@ -72,10 +82,10 @@ class F1r3DriveCli implements Callable<Integer> {
         }, "F1r3Drive-Shutdown"));
 
         // Mount filesystem - unmounting is handled by shutdown hook
-        if (revAddress != null && privateKey != null) { 
-            f1r3DriveFuse.mountAndUnlockRootDirectory(mountPoint, true, revAddress, privateKey);
+        if (revAddress != null && privateKey != null) {
+            f1r3DriveFuse.mountAndUnlockRootDirectory(mountPoint, true, fuseDebug, revAddress, privateKey, MOUNT_OPTIONS);
         } else {
-            f1r3DriveFuse.mount(mountPoint, true);
+            f1r3DriveFuse.mount(mountPoint, true, fuseDebug, MOUNT_OPTIONS);
         }
         return 0;
     }

@@ -10,7 +10,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.ProtocolStringList;
 import com.rfksystems.blake2b.Blake2b;
 import com.rfksystems.blake2b.security.Blake2bProvider;
-import io.f1r3fly.f1r3drive.fuse.FuseException;
+import ru.serce.jnrfuse.FuseException;
 import fr.acinq.secp256k1.Hex;
 import fr.acinq.secp256k1.Secp256k1;
 import io.f1r3fly.f1r3drive.errors.F1r3flyDeployError;

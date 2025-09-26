@@ -2,18 +2,17 @@ package io.f1r3fly.f1r3drive.app;
 
 import io.f1r3fly.f1r3drive.filesystem.FileSystemAction;
 import io.f1r3fly.f1r3drive.errors.*;
-import io.f1r3fly.f1r3drive.fuse.ErrorCodes;
-import io.f1r3fly.f1r3drive.fuse.FuseFillDir;
-import io.f1r3fly.f1r3drive.fuse.FuseStubFS;
-import io.f1r3fly.f1r3drive.fuse.SuccessCodes;
+import ru.serce.jnrfuse.ErrorCodes;
+import ru.serce.jnrfuse.FuseFillDir;
+import ru.serce.jnrfuse.FuseStubFS;
+import ru.serce.jnrfuse.struct.FileStat;
+import ru.serce.jnrfuse.struct.FuseFileInfo;
+import ru.serce.jnrfuse.struct.Statvfs;
 import io.f1r3fly.f1r3drive.finderextensions.FinderSyncExtensionServiceServer;
 import io.f1r3fly.f1r3drive.filesystem.FileSystem;
 import io.f1r3fly.f1r3drive.blockchain.client.F1r3flyBlockchainClient;
 import io.f1r3fly.f1r3drive.filesystem.InMemoryFileSystem;
 import io.f1r3fly.f1r3drive.filesystem.OperationContext;
-import io.f1r3fly.f1r3drive.fuse.struct.FileStat;
-import io.f1r3fly.f1r3drive.fuse.struct.FuseFileInfo;
-import io.f1r3fly.f1r3drive.fuse.struct.Statvfs;
 import io.f1r3fly.f1r3drive.filesystem.utils.PathUtils;
 import jnr.ffi.Pointer;
 import jnr.ffi.types.mode_t;
@@ -27,8 +26,9 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.UUID;
+import java.util.List;
 import java.io.File;
 import jnr.posix.util.Platform;
 
@@ -36,16 +36,6 @@ public class F1r3DriveFuse extends FuseStubFS {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(F1r3DriveFuse.class);
 
-    private final String[] MOUNT_OPTIONS = {
-        // refers to https://github.com/osxfuse/osxfuse/wiki/Mount-options
-        "-o", "noappledouble",
-        "-o", "daemon_timeout=60", // 1 hour timeout
-        "-o", "defer_permissions", // permission is not supported that, this disables the permission check from
-        // Fuse side
-        "-o", "local",
-        "-o", "allow_other",
-        "-o", "auto_cache"
-    };
     private FileSystem fileSystem;
     private F1r3flyBlockchainClient f1R3FlyBlockchainClient;
     private FinderSyncExtensionServiceServer finderSyncExtensionServiceServer;
@@ -110,7 +100,7 @@ public class F1r3DriveFuse extends FuseStubFS {
 
             try {
                 int result = operation.execute();
-                if (result == SuccessCodes.OK) {
+                if (result == 0) {
                     if (isTrace) {
                         LOGGER.trace("Completed {} successfully", action);
                     } else {
@@ -189,7 +179,7 @@ public class F1r3DriveFuse extends FuseStubFS {
                 return -ErrorCodes.EACCES();
             }
             fileSystem.createFile(path, mode);
-            return SuccessCodes.OK;
+            return 0;
         });
     }
 
@@ -202,7 +192,7 @@ public class F1r3DriveFuse extends FuseStubFS {
                 return -ErrorCodes.ENOENT();
             }
             fileSystem.getAttributes(path, stat, getContext());
-            return SuccessCodes.OK;
+            return 0;
         });
     }
 
@@ -210,7 +200,7 @@ public class F1r3DriveFuse extends FuseStubFS {
     public int mkdir(String path, @mode_t long mode) {
         return executeWithErrorHandling(path, FileSystemAction.FUSE_MKDIR, () -> {
             fileSystem.makeDirectory(path, mode);
-            return SuccessCodes.OK;
+            return 0;
         });
     }
 
@@ -225,7 +215,7 @@ public class F1r3DriveFuse extends FuseStubFS {
     public int readdir(String path, Pointer buf, FuseFillDir filter, @off_t long offset, FuseFileInfo fi) {
         return executeWithErrorHandling(path, FileSystemAction.FUSE_READDIR, () -> {
             fileSystem.readDirectory(path, buf, filter);
-            return SuccessCodes.OK;
+            return 0;
         });
     }
 
@@ -241,7 +231,7 @@ public class F1r3DriveFuse extends FuseStubFS {
     public int rename(String path, String newName) {
         return executeWithErrorHandling(path, FileSystemAction.FUSE_RENAME, () -> {
             fileSystem.renameFile(path, newName);
-            return SuccessCodes.OK;
+            return 0;
         });
     }
 
@@ -249,7 +239,7 @@ public class F1r3DriveFuse extends FuseStubFS {
     public int rmdir(String path) {
         return executeWithErrorHandling(path, FileSystemAction.FUSE_RMDIR, () -> {
             fileSystem.removeDirectory(path);
-            return SuccessCodes.OK;
+            return 0;
         });
     }
 
@@ -257,7 +247,7 @@ public class F1r3DriveFuse extends FuseStubFS {
     public int truncate(String path, long offset) {
         return executeWithErrorHandling(path, FileSystemAction.FUSE_TRUNCATE, () -> {
             fileSystem.truncateFile(path, offset);
-            return SuccessCodes.OK;
+            return 0;
         });
     }
 
@@ -265,7 +255,7 @@ public class F1r3DriveFuse extends FuseStubFS {
     public int unlink(String path) {
         return executeWithErrorHandling(path, FileSystemAction.FUSE_UNLINK, () -> {
             fileSystem.unlinkFile(path);
-            return SuccessCodes.OK;
+            return 0;
         });
     }
 
@@ -279,7 +269,7 @@ public class F1r3DriveFuse extends FuseStubFS {
             }
             fileSystem.openFile(path);
             LOGGER.debug("Opened file {}", path);
-            return SuccessCodes.OK;
+            return 0;
         });
     }
 
@@ -294,11 +284,11 @@ public class F1r3DriveFuse extends FuseStubFS {
     public int flush(String path, FuseFileInfo fi) {
         return executeWithErrorHandling(path, FileSystemAction.FUSE_FLUSH, () -> {
             fileSystem.flushFile(path);
-            return SuccessCodes.OK;
+            return 0;
         });
     }
 
-    public void mountAndUnlockRootDirectory(Path mountPoint, boolean blocking, String revAddress, String privateKey) {
+    public void mountAndUnlockRootDirectory(Path mountPoint, boolean blocking, boolean debug, String revAddress, String privateKey, String[] mountOptions) {
         // Run unlock in background after waiting for mount to complete
         Thread unlockThread = new Thread(() -> {
             try {
@@ -325,12 +315,11 @@ public class F1r3DriveFuse extends FuseStubFS {
         unlockThread.start();
         
         LOGGER.debug("Started background unlock thread for revAddress: {}", revAddress);
-        mount(mountPoint, blocking);
+        mount(mountPoint, blocking, debug, mountOptions);
     }
 
-    @Override
-    public void mount(Path mountPoint, boolean blocking, boolean debug, String[] fuseOpts) {
-        LOGGER.debug("Called Mounting F1r3DriveFuse on {} with opts {}", mountPoint, Arrays.toString(fuseOpts));
+    public void mount(Path mountPoint, boolean blocking, boolean debug, String[] mountOptions) {
+        LOGGER.debug("Called Mounting F1r3DriveFuse on {} with opts {}", mountPoint, Arrays.toString(mountOptions));
 
         try {
             // Ensure mount point exists and is accessible
@@ -348,32 +337,7 @@ public class F1r3DriveFuse extends FuseStubFS {
                 throw new RuntimeException("Mount point is not accessible (read/write): " + mountPoint);
             }
             LOGGER.debug("Mount point verified: {}", mountPoint);
-
-            // Extract icon and prepare mount options with icon if on macOS
-            String[] allFuseOpts;
-            if (Platform.IS_MAC) {
-                String iconPath = extractIconFromJar();
-                if (iconPath != null) {
-                    // Combine existing options with volicon
-                    allFuseOpts = Arrays.copyOf(fuseOpts, fuseOpts.length + MOUNT_OPTIONS.length + 2);
-                    System.arraycopy(fuseOpts, 0, allFuseOpts, 0, fuseOpts.length);
-                    System.arraycopy(MOUNT_OPTIONS, 0, allFuseOpts, fuseOpts.length, MOUNT_OPTIONS.length);
-                    allFuseOpts[allFuseOpts.length - 2] = "-o";
-                    allFuseOpts[allFuseOpts.length - 1] = "volicon=" + iconPath;
-                    LOGGER.debug("Added volume icon option: volicon={}", iconPath);
-                } else {
-                    // No icon available, use standard options
-                    allFuseOpts = Arrays.copyOf(fuseOpts, fuseOpts.length + MOUNT_OPTIONS.length);
-                    System.arraycopy(fuseOpts, 0, allFuseOpts, 0, fuseOpts.length);
-                    System.arraycopy(MOUNT_OPTIONS, 0, allFuseOpts, fuseOpts.length, MOUNT_OPTIONS.length);
-                }
-            } else {
-                // Not macOS, use standard options
-                allFuseOpts = Arrays.copyOf(fuseOpts, fuseOpts.length + MOUNT_OPTIONS.length);
-                System.arraycopy(fuseOpts, 0, allFuseOpts, 0, fuseOpts.length);
-                System.arraycopy(MOUNT_OPTIONS, 0, allFuseOpts, fuseOpts.length, MOUNT_OPTIONS.length);
-            }
-
+            
             LOGGER.debug("Creating InMemoryFileSystem...");
             this.fileSystem = new InMemoryFileSystem(f1R3FlyBlockchainClient);
             LOGGER.debug("Created InMemoryFileSystem successfully");
@@ -383,9 +347,6 @@ public class F1r3DriveFuse extends FuseStubFS {
                 this::handleChange, this::handleUnlockRevDirectory, 54000);
             LOGGER.debug("Created FinderSyncExtensionServiceServer successfully");
 
-            this.mountName = "F1r3DriveFuse-" + UUID.randomUUID();
-            LOGGER.debug("Generated mount name: {}", this.mountName);
-
             LOGGER.debug("Waiting for background operations to complete...");
             waitOnBackgroundThread();
 
@@ -393,10 +354,10 @@ public class F1r3DriveFuse extends FuseStubFS {
             finderSyncExtensionServiceServer.start();
             LOGGER.debug("Started FinderSyncExtensionServiceServer successfully");
 
-            LOGGER.debug("Mounting FUSE filesystem with options: {}", Arrays.toString(allFuseOpts));
-            super.mount(mountPoint, blocking, debug, allFuseOpts);
+            LOGGER.debug("Mounting FUSE filesystem with options: {}", Arrays.toString(mountOptions));
+            super.mount(mountPoint, blocking, debug, mountOptions);
 
-            LOGGER.info("Successfully mounted F1r3DriveFuse on {} with name {}", mountPoint, this.mountName);
+            LOGGER.info("Successfully mounted F1r3DriveFuse on {} with name {}", mountPoint, mountPoint.getFileName().toString());
 
         } catch (RuntimeException e) {
             LOGGER.error("Runtime error during mount: {}", e.getMessage(), e);

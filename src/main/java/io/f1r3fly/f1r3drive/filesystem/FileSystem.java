@@ -1,12 +1,12 @@
 package io.f1r3fly.f1r3drive.filesystem;
 
 import io.f1r3fly.f1r3drive.errors.*;
-import io.f1r3fly.f1r3drive.fuse.FuseFillDir;
+import ru.serce.jnrfuse.FuseFillDir;
 import io.f1r3fly.f1r3drive.filesystem.common.Directory;
 import io.f1r3fly.f1r3drive.filesystem.common.File;
-import io.f1r3fly.f1r3drive.fuse.struct.FileStat;
-import io.f1r3fly.f1r3drive.fuse.struct.FuseContext;
-import io.f1r3fly.f1r3drive.fuse.struct.Statvfs;
+import ru.serce.jnrfuse.struct.FileStat;
+import ru.serce.jnrfuse.struct.FuseContext;
+import ru.serce.jnrfuse.struct.Statvfs;
 import jnr.ffi.Pointer;
 import jnr.ffi.types.mode_t;
 import jnr.ffi.types.off_t;
