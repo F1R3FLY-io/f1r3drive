@@ -1,0 +1,125 @@
+@startuml
+!theme plain
+title Platform Abstraction Layer (Layer 0)
+
+package "io.f1r3fly.f1r3drive.platform" <<NEW>> {
+
+  interface ChangeWatcher <<NEW>> {
+    + initialize(mountPath: String, listener: ChangeListener): void
+    + startMonitoring(): void
+    + stopMonitoring(): void
+    + isMonitoring(): boolean
+    + registerFileCallback(path: String, callback: FileChangeCallback): void
+    + unregisterFileCallback(path: String): void
+    + cleanup(): void
+    + getPlatformInfo(): PlatformInfo
+  }
+
+  interface ChangeListener <<NEW>> {
+    + onFileCreated(path: String, metadata: FileMetadata): void
+    + onFileModified(path: String, metadata: FileMetadata): void
+    + onFileDeleted(path: String): void
+    + onFileAccessed(path: String, accessType: AccessType): void
+    + onDirectoryCreated(path: String): void
+    + onDirectoryDeleted(path: String): void
+    + onError(path: String, error: Exception): void
+  }
+
+  interface FileChangeCallback <<NEW>> {
+    + onDemandLoad(path: String): CompletableFuture<byte[]>
+    + onPlaceholderUpdate(path: String, info: PlaceholderInfo): void
+    + shouldCache(path: String): boolean
+  }
+
+  abstract class PlatformInfo <<NEW>> {
+    + getPlatformName(): String
+    + getVersion(): String
+    + getSupportedFeatures(): Set<String>
+    {abstract} + supportsFSEvents(): boolean
+    {abstract} + supportsFileProvider(): boolean
+    {abstract} + supportsFUSE(): boolean
+  }
+
+  class PlatformDetector <<NEW>> {
+    + {static} detectPlatform(): Platform
+    + {static} isMacOS(): boolean
+    + {static} isLinux(): boolean
+    + {static} isWindows(): boolean
+    + {static} getOSName(): String
+    + {static} getOSVersion(): String
+  }
+
+  class ChangeWatcherFactory <<NEW>> {
+    + {static} create(): ChangeWatcher
+    + {static} create(platform: Platform): ChangeWatcher
+    - {static} createMacOSWatcher(): ChangeWatcher
+    - {static} createLinuxWatcher(): ChangeWatcher
+    - {static} createWindowsWatcher(): ChangeWatcher
+    + {static} isPlatformSupported(platform: Platform): boolean
+  }
+
+  enum Platform <<NEW>> {
+    MACOS
+    LINUX
+    WINDOWS
+    UNKNOWN
+  }
+
+  enum AccessType <<NEW>> {
+    READ
+    WRITE
+    EXECUTE
+    METADATA
+  }
+
+  class FileMetadata <<NEW>> {
+    - size: long
+    - lastModified: long
+    - isDirectory: boolean
+    - isRegularFile: boolean
+    --
+    + getSize(): long
+    + getLastModified(): long
+    + isDirectory(): boolean
+    + isRegularFile(): boolean
+  }
+
+  exception PlatformException <<NEW>> {
+    + PlatformException(message: String)
+    + PlatformException(message: String, cause: Throwable)
+  }
+
+  exception UnsupportedPlatformException <<NEW>> {
+    + UnsupportedPlatformException(platform: Platform)
+  }
+
+  class PlaceholderInfo <<REFERENCE>> {
+    + path: String
+    + size: long
+    + state: PlaceholderState
+    --
+    Note: Full definition in\nPlaceholder Manager diagram
+  }
+}
+
+' Relationships
+ChangeWatcher ..> ChangeListener : uses
+ChangeWatcher ..> FileChangeCallback : uses
+ChangeWatcher ..> PlatformInfo : provides
+ChangeWatcherFactory ..> ChangeWatcher : creates
+ChangeWatcherFactory ..> Platform : uses
+PlatformDetector ..> Platform : returns
+ChangeListener ..> FileMetadata : receives
+ChangeListener ..> AccessType : receives
+FileChangeCallback ..> PlaceholderInfo : uses
+
+' Notes
+note top of ChangeWatcher : Main interface for\nplatform-specific\nfile monitoring
+
+note right of ChangeWatcherFactory : Factory pattern for creating\nplatform-specific\nimplementations
+
+note bottom of PlatformDetector : Automatic detection of\ncurrent operating system
+
+note left of ChangeListener : Unified interface for\nhandling file events\nacross all platforms
+
+@enduml
