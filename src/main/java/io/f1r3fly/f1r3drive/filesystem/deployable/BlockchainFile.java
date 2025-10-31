@@ -3,11 +3,11 @@ package io.f1r3fly.f1r3drive.filesystem.deployable;
 import io.f1r3fly.f1r3drive.encryption.AESCipher;
 import io.f1r3fly.f1r3drive.errors.OperationNotPermitted;
 import io.f1r3fly.f1r3drive.blockchain.BlockchainContext;
+import io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer;
 import io.f1r3fly.f1r3drive.filesystem.common.Directory;
 import io.f1r3fly.f1r3drive.filesystem.common.File;
 import io.f1r3fly.f1r3drive.blockchain.rholang.RholangExpressionConstructor;
 import io.f1r3fly.f1r3drive.filesystem.utils.PathUtils;
-import jnr.ffi.Pointer;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 
@@ -60,7 +60,7 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
     }
 
 
-    public int read(Pointer buffer, long size, long offset) throws IOException {
+    public int read(FSPointer buffer, long size, long offset) throws IOException {
         open(); // make sure file is open
 
         int bytesToRead = (int) Math.min(this.size - offset, size);
@@ -107,7 +107,7 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
         open();
     }
 
-    public int write(Pointer buffer, long bufSize, long writeOffset) throws IOException {
+    public int write(FSPointer buffer, long bufSize, long writeOffset) throws IOException {
         log.trace("Writing to file {} at offset {}", cachedFile.getAbsolutePath(), writeOffset);
 
         open(); // make sure file is open

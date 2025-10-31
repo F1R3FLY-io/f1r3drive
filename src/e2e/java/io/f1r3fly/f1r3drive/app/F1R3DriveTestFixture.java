@@ -4,10 +4,10 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import generic.FinderSyncExtensionServiceOuterClass;
+import io.f1r3fly.f1r3drive.app.linux.fuse.F1r3DriveFuse;
 import io.f1r3fly.f1r3drive.blockchain.client.F1r3flyBlockchainClient;
 import io.f1r3fly.f1r3drive.encryption.AESCipher;
 import io.f1r3fly.f1r3drive.finderextensions.client.FinderSyncExtensionServiceClient;
-import io.f1r3fly.f1r3drive.fuse.utils.MountUtils;
 import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -270,9 +270,10 @@ public class F1R3DriveTestFixture {
                     // If we reach here without exception, check if our mount point is still in the output
                     // For simplicity in tests, we'll skip the detailed check and just attempt force unmount
                     log.debug("Attempting force unmount as safety measure");
-                    boolean forceUnmountSuccess = MountUtils.umount(MOUNT_POINT);
-                    if (!forceUnmountSuccess) {
-                        log.warn("Force unmount via MountUtils reported failure");
+                    Process unmountProcess = new ProcessBuilder("umount", MOUNT_POINT.toString()).start();
+                    int exitCode = unmountProcess.waitFor();
+                    if (exitCode != 0) {
+                        log.warn("Force unmount via system command reported failure with exit code: {}", exitCode);
                     }
                 } catch (Exception e) {
                     // Ignore errors from force unmount - this is expected if already unmounted

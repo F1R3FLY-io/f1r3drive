@@ -4,7 +4,7 @@ import casper.DeployServiceCommon;
 import io.f1r3fly.f1r3drive.blockchain.wallet.RevWalletInfo;
 import io.f1r3fly.f1r3drive.errors.*;
 import io.f1r3fly.f1r3drive.blockchain.BlockchainContext;
-import ru.serce.jnrfuse.FuseFillDir;
+import io.f1r3fly.f1r3drive.filesystem.bridge.*;
 import io.f1r3fly.f1r3drive.background.state.StateChangeEvents;
 import io.f1r3fly.f1r3drive.background.state.StateChangeEventsManager;
 import io.f1r3fly.f1r3drive.background.state.StateChangeEventProcessor;
@@ -19,14 +19,7 @@ import io.f1r3fly.f1r3drive.filesystem.local.LockedWalletDirectory;
 import io.f1r3fly.f1r3drive.filesystem.local.RootDirectory;
 import io.f1r3fly.f1r3drive.filesystem.local.TokenDirectory;
 import io.f1r3fly.f1r3drive.filesystem.local.TokenFile;
-import ru.serce.jnrfuse.struct.FileStat;
-import ru.serce.jnrfuse.struct.FuseContext;
-import ru.serce.jnrfuse.struct.Statvfs;
 import io.f1r3fly.f1r3drive.filesystem.utils.PathUtils;
-import jnr.ffi.Pointer;
-import jnr.ffi.types.mode_t;
-import jnr.ffi.types.off_t;
-import jnr.ffi.types.size_t;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -161,7 +154,7 @@ public class InMemoryFileSystem implements FileSystem {
     }
 
     // Core file system operations
-    public void createFile(String path, @mode_t long mode)
+    public void createFile(String path, long mode)
             throws PathNotFound, FileAlreadyExists, OperationNotPermitted {
         Path maybeExist = findPath(path);
 
@@ -173,15 +166,15 @@ public class InMemoryFileSystem implements FileSystem {
         parent.mkfile(getLastComponent(path));
     }
 
-    public void getAttributes(String path, FileStat stat, FuseContext fuseContext) throws PathNotFound {
+    public void getAttributes(String path, FSFileStat stat, FSContext context) throws PathNotFound {
         Path p = findPath(path);
         if (p == null) {
             throw new PathNotFound(path);
         }
-        p.getAttr(stat, fuseContext);
+        p.getAttr(stat, context);
     }
 
-    public void makeDirectory(String path, @mode_t long mode)
+    public void makeDirectory(String path, long mode)
             throws PathNotFound, FileAlreadyExists, OperationNotPermitted {
         Path maybeExist = findPath(path);
         if (maybeExist != null) {
@@ -192,18 +185,18 @@ public class InMemoryFileSystem implements FileSystem {
         parent.mkdir(getLastComponent(path));
     }
 
-    public int readFile(String path, Pointer buf, @size_t long size, @off_t long offset)
+    public int readFile(String path, FSPointer buf, long size, long offset)
             throws PathNotFound, PathIsNotAFile, IOException {
         File file = getFileByPath(path);
         return file.read(buf, size, offset);
     }
 
-    public void readDirectory(String path, Pointer buf, FuseFillDir filter) throws PathNotFound, PathIsNotADirectory {
+    public void readDirectory(String path, FSFillDir filter) throws PathNotFound, PathIsNotADirectory {
         Directory directory = getDirectoryByPath(path);
-        directory.read(buf, filter);
+        directory.read(filter);
     }
 
-    public void getFileSystemStats(String path, Statvfs stbuf) {
+    public void getFileSystemStats(String path, FSStatVfs stbuf) {
         if ("/".equals(path)) {
             int BLOCKSIZE = 4096;
             int FUSE_NAME_MAX = 255;
@@ -212,12 +205,12 @@ public class InMemoryFileSystem implements FileSystem {
             long UsableSpace = totalSpace;
             long tBlocks = totalSpace / BLOCKSIZE;
             long aBlocks = UsableSpace / BLOCKSIZE;
-            stbuf.f_bsize.set(BLOCKSIZE);
-            stbuf.f_frsize.set(BLOCKSIZE);
-            stbuf.f_blocks.set(tBlocks);
-            stbuf.f_bavail.set(aBlocks);
-            stbuf.f_bfree.set(aBlocks);
-            stbuf.f_namemax.set(FUSE_NAME_MAX);
+            stbuf.setBlockSize(BLOCKSIZE);
+            stbuf.setFragmentSize(BLOCKSIZE);
+            stbuf.setBlocks(tBlocks);
+            stbuf.setBlocksAvailable(aBlocks);
+            stbuf.setBlocksFree(aBlocks);
+            stbuf.setMaxFilenameLength(FUSE_NAME_MAX);
         }
     }
 
@@ -274,7 +267,7 @@ public class InMemoryFileSystem implements FileSystem {
         file.open();
     }
 
-    public int writeFile(String path, Pointer buf, @size_t long size, @off_t long offset)
+    public int writeFile(String path, FSPointer buf, long size, long offset)
             throws PathNotFound, PathIsNotAFile, IOException {
         File file = getFileByPath(path);
         return file.write(buf, size, offset);

@@ -1,5 +1,6 @@
 package io.f1r3fly.f1r3drive.app;
 
+import io.f1r3fly.f1r3drive.app.linux.fuse.F1r3DriveFuse;
 import io.f1r3fly.f1r3drive.encryption.AESCipher;
 import io.f1r3fly.f1r3drive.blockchain.client.F1r3flyBlockchainClient;
 import picocli.CommandLine;

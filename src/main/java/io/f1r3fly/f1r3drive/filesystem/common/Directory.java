@@ -1,10 +1,9 @@
 package io.f1r3fly.f1r3drive.filesystem.common;
 
-import ru.serce.jnrfuse.FuseFillDir;
+import io.f1r3fly.f1r3drive.filesystem.bridge.FSFillDir;
+import io.f1r3fly.f1r3drive.filesystem.bridge.FSFileStat;
+import io.f1r3fly.f1r3drive.filesystem.bridge.FSContext;
 import io.f1r3fly.f1r3drive.errors.OperationNotPermitted;
-import ru.serce.jnrfuse.struct.FileStat;
-import ru.serce.jnrfuse.struct.FuseContext;
-import jnr.ffi.Pointer;
 
 import java.util.Set;
 
@@ -51,17 +50,17 @@ public interface Directory extends Path {
         return null;
     }
 
-    default void read(Pointer buf, FuseFillDir filler) {
+    default void read(FSFillDir filler) {
         for (Path child : getChildren()) {
-            filler.apply(buf, child.getName(), null, 0);
+            filler.apply(child.getName(), null, 0);
         }
     }
 
-    default void getAttr(FileStat stat, FuseContext fuseContext) {
-        stat.st_mode.set(FileStat.S_IFDIR | 0777);
-        stat.st_uid.set(fuseContext.uid.get());
-        stat.st_gid.set(fuseContext.gid.get());
-        stat.st_mtim.tv_sec.set(getLastUpdated());
+    default void getAttr(FSFileStat stat, FSContext context) {
+        stat.setMode(FSFileStat.S_IFDIR | 0777);
+        stat.setUid(context.getUid());
+        stat.setGid(context.getGid());
+        stat.setModificationTime(getLastUpdated());
     }
 
     default boolean isEmpty() {

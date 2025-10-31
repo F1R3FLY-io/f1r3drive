@@ -10,7 +10,6 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.ProtocolStringList;
 import com.rfksystems.blake2b.Blake2b;
 import com.rfksystems.blake2b.security.Blake2bProvider;
-import ru.serce.jnrfuse.FuseException;
 import fr.acinq.secp256k1.Hex;
 import fr.acinq.secp256k1.Secp256k1;
 import io.f1r3fly.f1r3drive.errors.F1r3flyDeployError;
@@ -327,7 +326,7 @@ public class F1r3flyBlockchainClient {
         try {
             digest = MessageDigest.getInstance(Blake2b.BLAKE2_B_256);
         } catch (NoSuchAlgorithmException e) {
-            throw new FuseException("Can't load MessageDigest instance (BLAKE2_B_256)", e);
+            throw new F1r3DriveError("Can't load MessageDigest instance (BLAKE2_B_256)", e);
         }
 
         final Secp256k1 secp256k1 = Secp256k1.get();
