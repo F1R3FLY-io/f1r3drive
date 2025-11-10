@@ -1,0 +1,215 @@
+@startuml
+!theme plain
+title macOS Implementation (macOS JAR Only)
+
+package "io.f1r3fly.f1r3drive.platform.macos" <<macOS ONLY>> {
+
+  class MacOSChangeWatcher <<NEW>> {
+    - fsEventsMonitor: FSEventsMonitor
+    - fileProvider: FileProviderIntegration
+    - changeListener: ChangeListener
+    - mountPath: String
+    - isMonitoring: boolean
+    - eventExecutor: ExecutorService
+    - callbacks: Map<String, FileChangeCallback>
+
+    + initialize(mountPath: String, listener: ChangeListener): void
+    + startMonitoring(): void
+    + stopMonitoring(): void
+    + isMonitoring(): boolean
+    + registerFileCallback(path: String, callback: FileChangeCallback): void
+    + unregisterFileCallback(path: String): void
+    + cleanup(): void
+    + getPlatformInfo(): PlatformInfo
+    + setMemoryFileSystem(fs: InMemoryFileSystem): void
+    + setPlaceholderManager(manager: PlaceholderManager): void
+    - handleFSEvent(event: FSEvent): void
+    - handleFileProviderEvent(event: FileProviderEvent): void
+    - initializeFileProvider(): void
+    - initializeFSEventsMonitor(): void
+    - updateMemoryFileSystem(path: String, op: FileOperation): void
+  }
+
+  class FSEventsMonitor <<NEW>> {
+    - streamRef: long
+    - watchPath: String
+    - callback: FSEventCallback
+    - runLoop: CFRunLoop
+    - isRunning: boolean
+    - monitorThread: Thread
+    - callbackExecutor: ExecutorService
+
+    + startMonitoring(path: String, callback: FSEventCallback): void
+    + stopMonitoring(): void
+    + isRunning(): boolean
+    + cleanup(): void
+    - nativeEventCallback(paths: String[], flags: int[], eventIds: long[]): void
+    - createFSEvent(path: String, flags: int, eventId: long): FSEvent
+    - setupNativeStream(): void
+    - destroyNativeStream(): void
+    - runMonitorLoop(): void
+  }
+
+  class FileProviderIntegration <<NEW>> {
+    - providerExtension: NSFileProviderExtension
+    - mountPoint: String
+    - callback: FileProviderCallback
+    - placeholderManager: PlaceholderManager
+    - providerItems: Map<String, NSFileProviderItem>
+
+    + initialize(mountPoint: String, callback: FileProviderCallback): void
+    + createVirtualMount(): void
+    + createPlaceholder(path: String, info: PlaceholderInfo): void
+    + updatePlaceholder(path: String, content: byte[]): void
+    + removePlaceholder(path: String): void
+    + getProviderItem(path: String): NSFileProviderItem
+    + syncToFinder(): void
+    + cleanup(): void
+    - handleProviderRequest(request: NSFileProviderRequest): void
+    - createNSFileProviderItem(path: String, info: PlaceholderInfo): NSFileProviderItem
+  }
+
+  class MacOSPlatformInfo <<NEW>> {
+    + getPlatformName(): String
+    + getVersion(): String
+    + supportsFSEvents(): boolean
+    + supportsFileProvider(): boolean
+    + supportsFUSE(): boolean
+    + getSupportedFeatures(): Set<String>
+    + getMacOSVersion(): String
+    + supportsFileProviderAPI(): boolean
+  }
+
+  interface FSEventCallback <<NEW>> {
+    + onEvent(event: FSEvent): void
+    + onError(error: FSEventsException): void
+  }
+
+  interface FileProviderCallback <<NEW>> {
+    + onProviderRequest(request: NSFileProviderRequest): void
+    + onItemChanged(path: String): void
+    + onPlaceholderAccessed(path: String): void
+  }
+
+  class FSEvent <<NEW>> {
+    + path: String
+    + flags: int
+    + eventId: long
+    + timestamp: long
+
+    + getPath(): String
+    + getFlags(): int
+    + getEventId(): long
+    + getTimestamp(): long
+    + isCreated(): boolean
+    + isModified(): boolean
+    + isDeleted(): boolean
+    + isRenamed(): boolean
+  }
+
+  class NSFileProviderRequest <<NEW>> {
+    + path: String
+    + requestType: ProviderRequestType
+    + itemIdentifier: String
+
+    + getPath(): String
+    + getRequestType(): ProviderRequestType
+    + getItemIdentifier(): String
+  }
+
+  class NSFileProviderItem <<NEW>> {
+    + itemIdentifier: String
+    + filename: String
+    + size: long
+    + contentModificationDate: Date
+    + content: byte[]
+
+    + getItemIdentifier(): String
+    + getFilename(): String
+    + getSize(): long
+    + getContent(): byte[]
+    + hasContent(): boolean
+  }
+
+  enum ProviderRequestType <<NEW>> {
+    ITEM_REQUEST
+    CONTENT_REQUEST
+    ENUMERATION_REQUEST
+    THUMBNAIL_REQUEST
+  }
+
+  enum FileOperation <<NEW>> {
+    CREATE
+    MODIFY
+    DELETE
+    RENAME
+  }
+
+  exception FSEventsException <<NEW>> {
+    + FSEventsException(message: String)
+    + FSEventsException(message: String, cause: Throwable)
+  }
+
+  class CFRunLoop <<NEW>> {
+    - runLoopRef: long
+
+    + run(): void
+    + stop(): void
+    + isRunning(): boolean
+  }
+}
+
+package "Native Integration" <<macOS Native>> {
+  class "FSEventStreamCreate" <<JNI>> {
+    + createStream(paths: String[], flags: int): long
+    + startStream(streamRef: long): boolean
+    + stopStream(streamRef: long): void
+  }
+
+  class "NSFileProvider" <<JNI>> {
+    + registerProvider(domain: String): boolean
+    + createItem(path: String, content: byte[]): NSFileProviderItem
+    + updateItem(identifier: String, content: byte[]): void
+  }
+
+  note as jninote
+    **JNI Native Library:**
+    libf1r3drive-fsevents.dylib
+
+    **Contains:**
+    - FSEvents API bindings
+    - File Provider Framework bindings
+    - CFRunLoop integration
+  end note
+}
+
+' Relationships
+MacOSChangeWatcher ..|> ChangeWatcher : implements
+MacOSChangeWatcher *-- FSEventsMonitor : contains
+MacOSChangeWatcher *-- FileProviderIntegration : contains
+MacOSChangeWatcher *-- MacOSPlatformInfo : creates
+MacOSChangeWatcher ..> FileOperation : uses
+
+FSEventsMonitor ..> FSEventCallback : uses
+FSEventsMonitor ..> FSEvent : creates
+FSEventsMonitor ..> CFRunLoop : uses
+FSEventsMonitor --> "FSEventStreamCreate" : uses
+
+FileProviderIntegration ..> FileProviderCallback : uses
+FileProviderIntegration ..> NSFileProviderRequest : handles
+FileProviderIntegration ..> NSFileProviderItem : manages
+FileProviderIntegration --> "NSFileProvider" : uses
+
+FSEvent ..> FileOperation : represents
+NSFileProviderRequest ..> ProviderRequestType : has
+
+' Notes
+note top of MacOSChangeWatcher : Main integration point\nfor macOS platform.\nUses native APIs
+
+note right of FSEventsMonitor : Low-level monitoring\nthrough macOS FSEvents API.\nRuns in separate thread
+
+note bottom of FileProviderIntegration : Integration with Finder through\nFile Provider Framework.\nSupports virtual filesystem
+
+note left of MacOSPlatformInfo : Information about macOS\nplatform capabilities.\nReturns true for FSEvents
+
+@enduml
