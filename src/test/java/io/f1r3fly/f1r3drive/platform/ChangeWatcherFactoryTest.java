@@ -113,27 +113,42 @@ class ChangeWatcherFactoryTest {
 
     @Test
     @EnabledOnOs(OS.LINUX)
-    void testCreateChangeWatcher_OnLinux_ThrowsException() {
+    void testCreateChangeWatcher_OnLinux_Success() {
         // This test only runs on actual Linux systems
-        // Linux implementation is not yet available
-        assertThrows(
-            ChangeWatcherFactory.UnsupportedPlatformException.class,
-            () -> {
-                ChangeWatcherFactory.createChangeWatcher();
-            }
-        );
+        // Linux implementation is now available in Phase 4
+        try {
+            ChangeWatcher watcher = ChangeWatcherFactory.createChangeWatcher();
+            assertNotNull(watcher);
+            assertTrue(
+                watcher instanceof
+                    io.f1r3fly.f1r3drive.platform.linux.LinuxChangeWatcher
+            );
+        } catch (ChangeWatcherFactory.UnsupportedPlatformException e) {
+            fail(
+                "Linux ChangeWatcher should be available in Phase 4: " +
+                    e.getMessage()
+            );
+        }
     }
 
     @Test
-    void testCreateChangeWatcher_WithSpecificPlatform_Linux_ThrowsException() {
-        assertThrows(
-            ChangeWatcherFactory.UnsupportedPlatformException.class,
-            () -> {
-                ChangeWatcherFactory.createChangeWatcher(
-                    PlatformInfo.Platform.LINUX
-                );
-            }
-        );
+    void testCreateChangeWatcher_WithSpecificPlatform_Linux_Success() {
+        // Linux ChangeWatcher is now available in Phase 4 with mock FileSystem
+        try {
+            ChangeWatcher watcher = ChangeWatcherFactory.createChangeWatcher(
+                PlatformInfo.Platform.LINUX
+            );
+            assertNotNull(watcher);
+            assertTrue(
+                watcher instanceof
+                    io.f1r3fly.f1r3drive.platform.linux.LinuxChangeWatcher
+            );
+        } catch (ChangeWatcherFactory.UnsupportedPlatformException e) {
+            fail(
+                "Linux ChangeWatcher should be available in Phase 4: " +
+                    e.getMessage()
+            );
+        }
     }
 
     @Test
