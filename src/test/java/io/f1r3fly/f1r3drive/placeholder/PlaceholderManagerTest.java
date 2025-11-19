@@ -164,7 +164,7 @@ class PlaceholderManagerTest {
     @Test
     void testGetStatistics() {
         PlaceholderManager.CacheStatistics stats =
-            placeholderManager.getStatistics();
+            placeholderManager.getCacheStatistics();
 
         assertNotNull(stats);
         assertEquals(0, stats.getCacheHits());

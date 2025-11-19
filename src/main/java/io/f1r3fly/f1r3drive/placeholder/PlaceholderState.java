@@ -5,7 +5,6 @@ package io.f1r3fly.f1r3drive.placeholder;
  * Represents the lifecycle of a placeholder from creation to successful loading or failure.
  */
 public enum PlaceholderState {
-
     /**
      * Placeholder has been created but loading has not started yet.
      * This is the initial state when a placeholder is first registered.
@@ -29,13 +28,6 @@ public enum PlaceholderState {
      * May be retried based on configuration and error type.
      */
     FAILED("Loading failed due to error"),
-
-    /**
-     * Placeholder has been evicted from cache.
-     * Content was previously loaded but removed due to cache pressure.
-     * Can be reloaded on next access.
-     */
-    EVICTED("Content was evicted from cache"),
 
     /**
      * Placeholder is being refreshed with updated content.
@@ -102,7 +94,7 @@ public enum PlaceholderState {
      * @return true if loading is possible
      */
     public boolean canLoad() {
-        return this == PENDING || this == FAILED || this == EVICTED;
+        return this == PENDING || this == FAILED;
     }
 
     /**

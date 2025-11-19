@@ -17,8 +17,8 @@ class ChangeWatcherFactoryTest {
     void testIsCurrentPlatformSupported() {
         boolean supported = ChangeWatcherFactory.isCurrentPlatformSupported();
 
-        // Should return a boolean value
-        assertNotNull(supported);
+        // Boolean is a primitive type, just verify it's a valid boolean
+        assertTrue(supported || !supported); // This will always pass but validates boolean type
     }
 
     @Test

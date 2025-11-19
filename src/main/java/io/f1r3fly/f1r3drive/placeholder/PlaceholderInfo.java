@@ -17,7 +17,6 @@ public class PlaceholderInfo {
 
     private volatile PlaceholderState state;
     private volatile long lastAccessed;
-    private volatile String blockchainAddress;
     private volatile String errorMessage;
     private volatile int loadAttempts;
 
@@ -30,12 +29,20 @@ public class PlaceholderInfo {
      * @param priority loading priority (higher = more priority)
      * @param created creation timestamp
      */
-    public PlaceholderInfo(String path, long expectedSize, String checksum, int priority, long created) {
+    public PlaceholderInfo(
+        String path,
+        long expectedSize,
+        String checksum,
+        int priority,
+        long created
+    ) {
         if (path == null || path.trim().isEmpty()) {
             throw new IllegalArgumentException("Path cannot be null or empty");
         }
         if (expectedSize < 0) {
-            throw new IllegalArgumentException("Expected size cannot be negative");
+            throw new IllegalArgumentException(
+                "Expected size cannot be negative"
+            );
         }
 
         this.path = path;
@@ -127,24 +134,6 @@ public class PlaceholderInfo {
      */
     public void setLastAccessed(long lastAccessed) {
         this.lastAccessed = lastAccessed;
-    }
-
-    /**
-     * Gets the blockchain address where the file is stored.
-     *
-     * @return blockchain address or null if not set
-     */
-    public String getBlockchainAddress() {
-        return blockchainAddress;
-    }
-
-    /**
-     * Sets the blockchain address where the file is stored.
-     *
-     * @param blockchainAddress blockchain address
-     */
-    public void setBlockchainAddress(String blockchainAddress) {
-        this.blockchainAddress = blockchainAddress;
     }
 
     /**
@@ -260,10 +249,15 @@ public class PlaceholderInfo {
      * @return copy with current timestamp as last accessed
      */
     public PlaceholderInfo withUpdatedAccess() {
-        PlaceholderInfo copy = new PlaceholderInfo(path, expectedSize, checksum, priority, created);
+        PlaceholderInfo copy = new PlaceholderInfo(
+            path,
+            expectedSize,
+            checksum,
+            priority,
+            created
+        );
         copy.state = this.state;
         copy.lastAccessed = System.currentTimeMillis();
-        copy.blockchainAddress = this.blockchainAddress;
         copy.errorMessage = this.errorMessage;
         copy.loadAttempts = this.loadAttempts;
         return copy;
@@ -284,9 +278,17 @@ public class PlaceholderInfo {
 
     @Override
     public String toString() {
-        return String.format("PlaceholderInfo{path='%s', expectedSize=%d, state=%s, priority=%d, " +
-                           "created=%d, lastAccessed=%d, attempts=%d, blockchainAddress='%s'}",
-            path, expectedSize, state, priority, created, lastAccessed, loadAttempts, blockchainAddress);
+        return String.format(
+            "PlaceholderInfo{path='%s', expectedSize=%d, state=%s, priority=%d, " +
+                "created=%d, lastAccessed=%d, attempts=%d}",
+            path,
+            expectedSize,
+            state,
+            priority,
+            created,
+            lastAccessed,
+            loadAttempts
+        );
     }
 
     /**
@@ -296,20 +298,27 @@ public class PlaceholderInfo {
      */
     public String toDetailedString() {
         long now = System.currentTimeMillis();
-        return String.format("PlaceholderInfo{\n" +
-                           "  path='%s'\n" +
-                           "  expectedSize=%d bytes\n" +
-                           "  checksum='%s'\n" +
-                           "  state=%s\n" +
-                           "  priority=%d\n" +
-                           "  age=%d ms\n" +
-                           "  timeSinceLastAccess=%d ms\n" +
-                           "  loadAttempts=%d\n" +
-                           "  blockchainAddress='%s'\n" +
-                           "  errorMessage='%s'\n" +
-                           "}",
-            path, expectedSize, checksum, state, priority,
-            now - created, now - lastAccessed, loadAttempts,
-            blockchainAddress, errorMessage);
+        return String.format(
+            "PlaceholderInfo{\n" +
+                "  path='%s'\n" +
+                "  expectedSize=%d bytes\n" +
+                "  checksum='%s'\n" +
+                "  state=%s\n" +
+                "  priority=%d\n" +
+                "  age=%d ms\n" +
+                "  timeSinceLastAccess=%d ms\n" +
+                "  loadAttempts=%d\n" +
+                "  errorMessage='%s'\n" +
+                "}",
+            path,
+            expectedSize,
+            checksum,
+            state,
+            priority,
+            now - created,
+            now - lastAccessed,
+            loadAttempts,
+            errorMessage
+        );
     }
 }

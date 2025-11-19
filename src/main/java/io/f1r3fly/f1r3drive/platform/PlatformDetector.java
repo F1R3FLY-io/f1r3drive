@@ -9,12 +9,27 @@ import org.slf4j.LoggerFactory;
  */
 public class PlatformDetector {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(PlatformDetector.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+        PlatformDetector.class
+    );
 
-    // Cache detected platform information
-    private static volatile PlatformInfo.Platform detectedPlatform = null;
-    private static volatile String detectedArchitecture = null;
-    private static volatile Boolean isSupported = null;
+    /**
+     * Holder pattern for thread-safe initialization without synchronization overhead.
+     * Ensures all values are initialized together and visible to all threads.
+     */
+    private static class PlatformInfoHolder {
+
+        static final PlatformInfo.Platform PLATFORM =
+            performPlatformDetection();
+        static final String ARCHITECTURE = performArchitectureDetection();
+        static final boolean IS_SUPPORTED = checkPlatformSupport();
+
+        static {
+            LOGGER.info("Detected platform: {}", PLATFORM.getDisplayName());
+            LOGGER.info("Detected architecture: {}", ARCHITECTURE);
+            LOGGER.info("Platform supported: {}", IS_SUPPORTED);
+        }
+    }
 
     /**
      * Private constructor to prevent instantiation.
@@ -29,15 +44,7 @@ public class PlatformDetector {
      * @return the detected platform
      */
     public static PlatformInfo.Platform detectPlatform() {
-        if (detectedPlatform == null) {
-            synchronized (PlatformDetector.class) {
-                if (detectedPlatform == null) {
-                    detectedPlatform = performPlatformDetection();
-                    LOGGER.info("Detected platform: {}", detectedPlatform.getDisplayName());
-                }
-            }
-        }
-        return detectedPlatform;
+        return PlatformInfoHolder.PLATFORM;
     }
 
     /**
@@ -46,32 +53,16 @@ public class PlatformDetector {
      * @return the detected architecture
      */
     public static String detectArchitecture() {
-        if (detectedArchitecture == null) {
-            synchronized (PlatformDetector.class) {
-                if (detectedArchitecture == null) {
-                    detectedArchitecture = performArchitectureDetection();
-                    LOGGER.info("Detected architecture: {}", detectedArchitecture);
-                }
-            }
-        }
-        return detectedArchitecture;
+        return PlatformInfoHolder.ARCHITECTURE;
     }
 
     /**
      * Checks if the current platform is supported by F1r3Drive.
      *
-     * @return true if platform is supported, false otherwise
+     * @return true if platform is supported
      */
     public static boolean isCurrentPlatformSupported() {
-        if (isSupported == null) {
-            synchronized (PlatformDetector.class) {
-                if (isSupported == null) {
-                    isSupported = checkPlatformSupport();
-                    LOGGER.info("Platform support status: {}", isSupported);
-                }
-            }
-        }
-        return isSupported;
+        return PlatformInfoHolder.IS_SUPPORTED;
     }
 
     /**
@@ -99,13 +90,19 @@ public class PlatformDetector {
         try {
             // Check platform support
             if (!isCurrentPlatformSupported()) {
-                LOGGER.warn("Current platform is not supported: {}", detectPlatform());
+                LOGGER.warn(
+                    "Current platform is not supported: {}",
+                    detectPlatform()
+                );
                 return false;
             }
 
             // Check Java version (minimum JDK 17)
             if (!isJavaVersionSupported()) {
-                LOGGER.warn("Java version is not supported: {}", getJavaVersion());
+                LOGGER.warn(
+                    "Java version is not supported: {}",
+                    getJavaVersion()
+                );
                 return false;
             }
 
@@ -117,7 +114,6 @@ public class PlatformDetector {
             }
 
             return true;
-
         } catch (Exception e) {
             LOGGER.error("Error checking system requirements", e);
             return false;
@@ -135,17 +131,19 @@ public class PlatformDetector {
         String osVersion = getOSVersion();
         String javaVersion = getJavaVersion();
 
-        return String.format("%s %s (%s) - Java %s",
+        return String.format(
+            "%s %s (%s) - Java %s",
             platform.getDisplayName(),
             osVersion,
             arch,
-            javaVersion);
+            javaVersion
+        );
     }
 
     /**
-     * Performs the actual platform detection.
+     * Performs the actual platform detection logic.
      *
-     * @return detected platform
+     * @return the detected platform
      */
     private static PlatformInfo.Platform performPlatformDetection() {
         String osName = System.getProperty("os.name", "").toLowerCase();
@@ -165,9 +163,9 @@ public class PlatformDetector {
     }
 
     /**
-     * Performs the actual architecture detection.
+     * Performs the actual architecture detection logic.
      *
-     * @return detected architecture
+     * @return the detected architecture
      */
     private static String performArchitectureDetection() {
         String arch = System.getProperty("os.arch", "").toLowerCase();
@@ -181,7 +179,11 @@ public class PlatformDetector {
             return "arm64";
         } else if (arch.contains("arm")) {
             return "arm";
-        } else if (arch.contains("x86") || arch.contains("i386") || arch.contains("i686")) {
+        } else if (
+            arch.contains("x86") ||
+            arch.contains("i386") ||
+            arch.contains("i686")
+        ) {
             return "x86";
         }
 
@@ -189,9 +191,9 @@ public class PlatformDetector {
     }
 
     /**
-     * Checks if the current platform is supported.
+     * Checks if the detected platform is supported.
      *
-     * @return true if supported, false otherwise
+     * @return true if platform is supported
      */
     private static boolean checkPlatformSupport() {
         PlatformInfo.Platform platform = detectPlatform();
@@ -221,7 +223,10 @@ public class PlatformDetector {
             if (isMacOSVersionSupported(version)) {
                 return true;
             } else {
-                LOGGER.warn("macOS version {} is not supported. Minimum required: 10.15", version);
+                LOGGER.warn(
+                    "macOS version {} is not supported. Minimum required: 10.15",
+                    version
+                );
                 return false;
             }
         } catch (Exception e) {
@@ -245,12 +250,13 @@ public class PlatformDetector {
 
             // Check kernel version for inotify support (minimum 2.6.13)
             if (!isLinuxKernelSupported()) {
-                LOGGER.warn("Linux kernel version is not supported for inotify");
+                LOGGER.warn(
+                    "Linux kernel version is not supported for inotify"
+                );
                 return false;
             }
 
             return true;
-
         } catch (Exception e) {
             LOGGER.error("Error checking Linux support", e);
             return false;
@@ -306,7 +312,6 @@ public class PlatformDetector {
             }
 
             return majorVersion >= 17;
-
         } catch (Exception e) {
             LOGGER.error("Error parsing Java version", e);
             return false;
@@ -327,7 +332,10 @@ public class PlatformDetector {
             case "x86":
             case "arm":
                 // 32-bit architectures have limited support
-                LOGGER.warn("32-bit architecture detected: {}. Support may be limited.", architecture);
+                LOGGER.warn(
+                    "32-bit architecture detected: {}. Support may be limited.",
+                    architecture
+                );
                 return true;
             default:
                 return false;
@@ -343,7 +351,10 @@ public class PlatformDetector {
     private static boolean isMacOSVersionSupported(String version) {
         try {
             // Try to get detailed version via sw_vers
-            ProcessBuilder pb = new ProcessBuilder("sw_vers", "-productVersion");
+            ProcessBuilder pb = new ProcessBuilder(
+                "sw_vers",
+                "-productVersion"
+            );
             Process process = pb.start();
             process.waitFor();
 
@@ -353,7 +364,9 @@ public class PlatformDetector {
                 return parseMacOSVersion(detailedVersion) >= 10.15;
             }
         } catch (Exception e) {
-            LOGGER.debug("Could not get detailed macOS version, falling back to system property");
+            LOGGER.debug(
+                "Could not get detailed macOS version, falling back to system property"
+            );
         }
 
         // Fallback to system property parsing
@@ -398,7 +411,6 @@ public class PlatformDetector {
             Process process = pb.start();
             process.waitFor();
             return process.exitValue() == 0;
-
         } catch (Exception e) {
             LOGGER.debug("Error checking FUSE availability", e);
             return false;
@@ -436,6 +448,7 @@ public class PlatformDetector {
      * System information container class.
      */
     public static class SystemInfo {
+
         private final PlatformInfo.Platform platform;
         private final String architecture;
         private final String osVersion;
@@ -443,8 +456,14 @@ public class PlatformDetector {
         private final String javaVMName;
         private final boolean isSupported;
 
-        private SystemInfo(PlatformInfo.Platform platform, String architecture, String osVersion,
-                          String javaVersion, String javaVMName, boolean isSupported) {
+        private SystemInfo(
+            PlatformInfo.Platform platform,
+            String architecture,
+            String osVersion,
+            String javaVersion,
+            String javaVMName,
+            boolean isSupported
+        ) {
             this.platform = platform;
             this.architecture = architecture;
             this.osVersion = osVersion;
@@ -479,8 +498,15 @@ public class PlatformDetector {
 
         @Override
         public String toString() {
-            return String.format("SystemInfo{platform=%s, arch=%s, osVersion='%s', javaVersion='%s', javaVM='%s', supported=%s}",
-                platform, architecture, osVersion, javaVersion, javaVMName, isSupported);
+            return String.format(
+                "SystemInfo{platform=%s, arch=%s, osVersion='%s', javaVersion='%s', javaVM='%s', supported=%s}",
+                platform,
+                architecture,
+                osVersion,
+                javaVersion,
+                javaVMName,
+                isSupported
+            );
         }
     }
 }

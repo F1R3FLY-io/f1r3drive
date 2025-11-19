@@ -1,16 +1,21 @@
 package io.f1r3fly.f1r3drive.placeholder;
 
+import io.f1r3fly.f1r3drive.cache.CacheStrategy;
+import io.f1r3fly.f1r3drive.cache.MemoryOnlyCacheStrategy;
+import io.f1r3fly.f1r3drive.cache.TieredCacheStrategy;
 import io.f1r3fly.f1r3drive.platform.FileChangeCallback;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.Map;
-import java.util.Set;
-import java.util.HashSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Central component for managing lazy loading of files from blockchain.
@@ -22,26 +27,28 @@ import java.util.HashSet;
  */
 public class PlaceholderManager {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(PlaceholderManager.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+        PlaceholderManager.class
+    );
 
     // Core components
     private final CacheConfiguration config;
     private final FileChangeCallback fileChangeCallback;
-    private final Map<String, PlaceholderInfo> placeholders = new ConcurrentHashMap<>();
-    private final Map<String, byte[]> contentCache = new ConcurrentHashMap<>();
+    private final Map<String, PlaceholderInfo> placeholders =
+        new ConcurrentHashMap<>();
+
+    // Phase 3: Unified tiered cache strategy
+    private final CacheStrategy cacheStrategy;
     private final Set<String> loadingFiles = ConcurrentHashMap.newKeySet();
 
     // Priority loading queue
-    private final PriorityBlockingQueue<LoadingTask> loadingQueue = new PriorityBlockingQueue<>();
+    private final PriorityBlockingQueue<LoadingTask> loadingQueue =
+        new PriorityBlockingQueue<>();
     private final ExecutorService loadingExecutor;
     private final ScheduledExecutorService cleanupExecutor;
 
-    // Cache statistics
-    private final AtomicLong cacheHits = new AtomicLong(0);
-    private final AtomicLong cacheMisses = new AtomicLong(0);
+    // Cache statistics - now managed by Caffeine
     private final AtomicLong totalLoads = new AtomicLong(0);
-    private final AtomicLong totalEvictions = new AtomicLong(0);
-    private final AtomicLong currentCacheSize = new AtomicLong(0);
 
     // State management
     private final AtomicBoolean isShutdown = new AtomicBoolean(false);
@@ -62,18 +69,40 @@ public class PlaceholderManager {
      * @param fileChangeCallback callback for loading content from blockchain
      * @param config cache configuration
      */
-    public PlaceholderManager(FileChangeCallback fileChangeCallback, CacheConfiguration config) {
+    public PlaceholderManager(
+        FileChangeCallback fileChangeCallback,
+        CacheConfiguration config
+    ) {
         if (fileChangeCallback == null) {
-            throw new IllegalArgumentException("FileChangeCallback cannot be null");
+            throw new IllegalArgumentException(
+                "FileChangeCallback cannot be null"
+            );
         }
         if (config == null) {
-            throw new IllegalArgumentException("CacheConfiguration cannot be null");
+            throw new IllegalArgumentException(
+                "CacheConfiguration cannot be null"
+            );
         }
 
         this.fileChangeCallback = fileChangeCallback;
         this.config = config;
 
-        // Create thread pools
+        // Phase 3: Initialize cache strategy based on configuration
+        this.cacheStrategy = createCacheStrategy(config);
+
+        LOGGER.info(
+            "Phase 3 cache strategy initialized: type={}, memory={}MB{}",
+            config.getCacheStrategyType(),
+            config.getMaxCacheSize() / (1024 * 1024),
+            config.isEnableDiskCache()
+                ? ", disk=" +
+                  (config.getMaxCacheSize() * config.getDiskCacheMultiplier()) /
+                  (1024 * 1024) +
+                  "MB"
+                : " (memory-only)"
+        );
+
+        // Initialize thread pools
         this.loadingExecutor = Executors.newFixedThreadPool(
             config.getLoadingThreads(),
             r -> {
@@ -83,13 +112,11 @@ public class PlaceholderManager {
             }
         );
 
-        this.cleanupExecutor = Executors.newSingleThreadScheduledExecutor(
-            r -> {
-                Thread t = new Thread(r, "PlaceholderCleanup");
-                t.setDaemon(true);
-                return t;
-            }
-        );
+        this.cleanupExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "PlaceholderCleanup");
+            t.setDaemon(true);
+            return t;
+        });
 
         // Start background tasks
         startBackgroundTasks();
@@ -106,7 +133,12 @@ public class PlaceholderManager {
      * @param priority loading priority (higher = more priority)
      * @return true if placeholder was created successfully
      */
-    public boolean createPlaceholder(String path, long size, String checksum, int priority) {
+    public boolean createPlaceholder(
+        String path,
+        long size,
+        String checksum,
+        int priority
+    ) {
         if (isShutdown.get()) {
             return false;
         }
@@ -118,20 +150,31 @@ public class PlaceholderManager {
         lock.writeLock().lock();
         try {
             PlaceholderInfo existing = placeholders.get(path);
-            if (existing != null && existing.getState() != PlaceholderState.FAILED) {
+            if (
+                existing != null &&
+                existing.getState() != PlaceholderState.FAILED
+            ) {
                 LOGGER.debug("Placeholder already exists for path: {}", path);
                 return true;
             }
 
             PlaceholderInfo placeholder = new PlaceholderInfo(
-                path, size, checksum, priority, System.currentTimeMillis()
+                path,
+                size,
+                checksum,
+                priority,
+                System.currentTimeMillis()
             );
 
             placeholders.put(path, placeholder);
-            LOGGER.debug("Created placeholder: path={}, size={}, priority={}", path, size, priority);
+            LOGGER.debug(
+                "Created placeholder: path={}, size={}, priority={}",
+                path,
+                size,
+                priority
+            );
 
             return true;
-
         } finally {
             lock.writeLock().unlock();
         }
@@ -148,16 +191,23 @@ public class PlaceholderManager {
             return null;
         }
 
-        // Check cache first
-        byte[] cached = contentCache.get(path);
-        if (cached != null) {
-            cacheHits.incrementAndGet();
+        // Phase 3: Check tiered cache (L1 memory -> L2 disk)
+        Optional<CacheStrategy.CacheResult> cacheResult = cacheStrategy.get(
+            path
+        );
+        if (cacheResult.isPresent()) {
+            CacheStrategy.CacheResult result = cacheResult.get();
             updateAccessTime(path);
-            LOGGER.debug("Cache hit for path: {}", path);
-            return cached;
+            LOGGER.debug(
+                "Cache hit for path: {} (level={}{})",
+                path,
+                result.getHitLevel(),
+                result.wasPromoted() ? ", promoted to L1" : ""
+            );
+            return result.getContent();
         }
 
-        cacheMisses.incrementAndGet();
+        LOGGER.debug("Cache miss for path: {}", path);
 
         // Check if already loading
         if (loadingFiles.contains(path)) {
@@ -180,7 +230,7 @@ public class PlaceholderManager {
             return;
         }
 
-        if (contentCache.containsKey(path)) {
+        if (cacheStrategy.contains(path)) {
             LOGGER.debug("File already cached, skipping preload: {}", path);
             return;
         }
@@ -194,7 +244,11 @@ public class PlaceholderManager {
         LoadingTask task = new LoadingTask(path, priority, false);
         loadingQueue.offer(task);
 
-        LOGGER.debug("Queued preload task: path={}, priority={}", path, priority);
+        LOGGER.debug(
+            "Queued preload task: path={}, priority={}",
+            path,
+            priority
+        );
     }
 
     /**
@@ -204,48 +258,40 @@ public class PlaceholderManager {
      * @return true if file was in cache and removed
      */
     public boolean clearCache(String path) {
-        lock.writeLock().lock();
-        try {
-            byte[] removed = contentCache.remove(path);
-            if (removed != null) {
-                currentCacheSize.addAndGet(-removed.length);
-                LOGGER.debug("Cleared cache for path: {}", path);
-                return true;
-            }
-            return false;
-        } finally {
-            lock.writeLock().unlock();
+        boolean removed = cacheStrategy.invalidate(path);
+        if (removed) {
+            LOGGER.debug("Cleared cache for path: {}", path);
         }
+        return removed;
     }
 
     /**
      * Clears all cached content.
      */
-    public void clearAllCache() {
-        lock.writeLock().lock();
-        try {
-            contentCache.clear();
-            currentCacheSize.set(0);
-            LOGGER.info("Cleared all cache content");
-        } finally {
-            lock.writeLock().unlock();
-        }
+    public void clearCache() {
+        CacheStrategy.UnifiedCacheStatistics stats =
+            cacheStrategy.getStatistics();
+        long totalSize = stats.getL1Size() + stats.getL2Size();
+        cacheStrategy.invalidateAll();
+        LOGGER.info("Cleared unified cache: {} items removed", totalSize);
     }
 
     /**
-     * Gets cache usage statistics.
+     * Gets cache statistics.
      *
-     * @return cache statistics
+     * @return current cache statistics
      */
-    public CacheStatistics getStatistics() {
+    public CacheStatistics getCacheStatistics() {
+        CacheStrategy.UnifiedCacheStatistics unifiedStats =
+            cacheStrategy.getStatistics();
         return new CacheStatistics(
-            cacheHits.get(),
-            cacheMisses.get(),
-            currentCacheSize.get(),
+            unifiedStats.getTotalHits(),
+            unifiedStats.getMisses(),
+            unifiedStats.getL1Size() + unifiedStats.getL2Size(),
             config.getMaxCacheSize(),
-            contentCache.size(),
+            (int) (unifiedStats.getL1Size() + unifiedStats.getL2Size()),
             totalLoads.get(),
-            totalEvictions.get(),
+            unifiedStats.getEvictions(),
             placeholders.size(),
             loadingQueue.size()
         );
@@ -283,7 +329,11 @@ public class PlaceholderManager {
             if (placeholder != null) {
                 placeholder.setState(newState);
                 placeholder.setLastAccessed(System.currentTimeMillis());
-                LOGGER.debug("Updated placeholder state: path={}, state={}", path, newState);
+                LOGGER.debug(
+                    "Updated placeholder state: path={}, state={}",
+                    path,
+                    newState
+                );
             }
         } finally {
             lock.writeLock().unlock();
@@ -357,7 +407,7 @@ public class PlaceholderManager {
 
             // Clear data structures
             placeholders.clear();
-            contentCache.clear();
+            cacheStrategy.invalidateAll();
             loadingFiles.clear();
             loadingQueue.clear();
 
@@ -384,14 +434,17 @@ public class PlaceholderManager {
                 totalLoads.incrementAndGet();
                 cacheContent(path, content);
                 updatePlaceholderState(path, PlaceholderState.LOADED);
-                LOGGER.debug("Successfully loaded content: path={}, size={}", path, content.length);
+                LOGGER.debug(
+                    "Successfully loaded content: path={}, size={}",
+                    path,
+                    content.length
+                );
                 return content;
             } else {
                 updatePlaceholderState(path, PlaceholderState.FAILED);
                 LOGGER.warn("Failed to load content from blockchain: {}", path);
                 return null;
             }
-
         } catch (Exception e) {
             updatePlaceholderState(path, PlaceholderState.FAILED);
             LOGGER.error("Error loading content for path: {}", path, e);
@@ -423,7 +476,8 @@ public class PlaceholderManager {
         }
 
         // Check cache after waiting
-        return contentCache.get(path);
+        Optional<CacheStrategy.CacheResult> result = cacheStrategy.get(path);
+        return result.map(CacheStrategy.CacheResult::getContent).orElse(null);
     }
 
     /**
@@ -434,51 +488,35 @@ public class PlaceholderManager {
      */
     private void cacheContent(String path, byte[] content) {
         if (content.length > config.getMaxFileSize()) {
-            LOGGER.debug("File too large to cache: path={}, size={}", path, content.length);
+            LOGGER.debug(
+                "File too large to cache: path={}, size={}",
+                path,
+                content.length
+            );
             return;
         }
 
-        lock.writeLock().lock();
-        try {
-            // Check if we need to evict
-            while (currentCacheSize.get() + content.length > config.getMaxCacheSize() && !contentCache.isEmpty()) {
-                evictLeastRecentlyUsed();
-            }
+        // Phase 3: Use tiered cache strategy for optimal storage
+        CacheStrategy.CacheMetadata metadata = content.length >
+            config.getMaxFileSize() / 2
+            ? CacheStrategy.CacheMetadata.defaultMetadata()
+            : CacheStrategy.CacheMetadata.highPriority();
 
-            contentCache.put(path, content);
-            currentCacheSize.addAndGet(content.length);
-            updateAccessTime(path);
+        cacheStrategy.put(path, content, metadata);
+        updateAccessTime(path);
 
-        } finally {
-            lock.writeLock().unlock();
-        }
+        LOGGER.debug("Cached content: path={}, size={}", path, content.length);
     }
 
     /**
      * Evicts least recently used content.
+     * Note: This method is now handled automatically by Caffeine Cache.
+     * Kept for compatibility but delegates to cache cleanup.
      */
     private void evictLeastRecentlyUsed() {
-        String lruPath = null;
-        long oldestAccess = Long.MAX_VALUE;
-
-        for (Map.Entry<String, PlaceholderInfo> entry : placeholders.entrySet()) {
-            if (contentCache.containsKey(entry.getKey())) {
-                long lastAccess = entry.getValue().getLastAccessed();
-                if (lastAccess < oldestAccess) {
-                    oldestAccess = lastAccess;
-                    lruPath = entry.getKey();
-                }
-            }
-        }
-
-        if (lruPath != null) {
-            byte[] evicted = contentCache.remove(lruPath);
-            if (evicted != null) {
-                currentCacheSize.addAndGet(-evicted.length);
-                totalEvictions.incrementAndGet();
-                LOGGER.debug("Evicted LRU content: {}", lruPath);
-            }
-        }
+        // Phase 3: Tiered cache handles all eviction automatically
+        cacheStrategy.performMaintenance();
+        LOGGER.debug("Triggered unified cache cleanup");
     }
 
     /**
@@ -529,12 +567,74 @@ public class PlaceholderManager {
     }
 
     /**
+     * Creates the appropriate cache strategy based on configuration.
+     *
+     * Phase 3: Factory method for flexible cache strategy selection
+     *
+     * @param config cache configuration
+     * @return configured cache strategy instance
+     */
+    private static CacheStrategy createCacheStrategy(
+        CacheConfiguration config
+    ) {
+        switch (config.getCacheStrategyType()) {
+            case MEMORY_ONLY:
+                LOGGER.info(
+                    "Using memory-only cache strategy for maximum performance"
+                );
+                return new MemoryOnlyCacheStrategy(
+                    config.getMaxCacheSize(),
+                    config.getCacheMaxAgeMs()
+                );
+            case TIERED:
+                LOGGER.info(
+                    "Using tiered cache strategy for balanced performance and persistence"
+                );
+                Path diskCacheDir = config.getDiskCacheDirectory() != null
+                    ? Paths.get(config.getDiskCacheDirectory())
+                    : Paths.get(
+                          System.getProperty("java.io.tmpdir"),
+                          "f1r3drive-cache"
+                      );
+
+                return new TieredCacheStrategy(
+                    config.getMaxCacheSize(), // L1 memory cache size
+                    config.getMaxFileSize(), // Memory threshold
+                    diskCacheDir, // L2 disk cache directory
+                    config.getMaxCacheSize() * config.getDiskCacheMultiplier(), // L2 disk cache size
+                    config.getCacheMaxAgeMs() // Cache expiration time
+                );
+            case LEGACY_CAFFEINE:
+                LOGGER.warn(
+                    "Using legacy Caffeine cache strategy - consider migrating to TIERED for better performance"
+                );
+                // For backward compatibility, use memory-only with Caffeine settings
+                return new MemoryOnlyCacheStrategy(
+                    config.getMaxCacheSize(),
+                    config.getCacheMaxAgeMs()
+                );
+            default:
+                LOGGER.warn(
+                    "Unknown cache strategy type: {}, falling back to TIERED",
+                    config.getCacheStrategyType()
+                );
+                return createCacheStrategy(
+                    CacheConfiguration.tieredConfig()
+                        .toBuilder()
+                        .maxCacheSize(config.getMaxCacheSize())
+                        .cacheMaxAgeMs(config.getCacheMaxAgeMs())
+                        .build()
+                );
+        }
+    }
+
+    /**
      * Processes a single loading task.
      *
      * @param task the loading task
      */
     private void processLoadingTask(LoadingTask task) {
-        if (contentCache.containsKey(task.path)) {
+        if (cacheStrategy.contains(task.path)) {
             return; // Already cached
         }
 
@@ -543,39 +643,67 @@ public class PlaceholderManager {
 
     /**
      * Performs periodic cleanup tasks.
+     * Split into read and write phases to minimize lock contention.
      */
     private void performCleanup() {
         try {
             long now = System.currentTimeMillis();
-            long maxAge = config.getCacheMaxAgeMs();
 
-            lock.writeLock().lock();
-            try {
-                // Remove expired cached content
-                contentCache.entrySet().removeIf(entry -> {
-                    PlaceholderInfo info = placeholders.get(entry.getKey());
-                    if (info != null && (now - info.getLastAccessed()) > maxAge) {
-                        currentCacheSize.addAndGet(-entry.getValue().length);
-                        totalEvictions.incrementAndGet();
-                        return true;
-                    }
-                    return false;
-                });
+            // Phase 3: Unified cache maintenance
+            cacheStrategy.performMaintenance();
 
-                // Clean up failed placeholders older than threshold
-                placeholders.entrySet().removeIf(entry -> {
-                    PlaceholderInfo info = entry.getValue();
-                    return info.getState() == PlaceholderState.FAILED &&
-                           (now - info.getCreated()) > config.getFailedPlaceholderMaxAgeMs();
-                });
+            // Phase 1: READ phase - collect items to remove (no lock)
+            Set<String> pathsToRemove = new HashSet<>();
 
-            } finally {
-                lock.writeLock().unlock();
+            // Read placeholders without lock for better concurrency
+            for (Map.Entry<
+                String,
+                PlaceholderInfo
+            > entry : placeholders.entrySet()) {
+                PlaceholderInfo info = entry.getValue();
+                if (
+                    info.getState() == PlaceholderState.FAILED &&
+                    (now - info.getCreated()) >
+                    config.getFailedPlaceholderMaxAgeMs()
+                ) {
+                    pathsToRemove.add(entry.getKey());
+                }
             }
 
-            LOGGER.debug("Cleanup completed. Cache size: {}, Placeholders: {}",
-                        contentCache.size(), placeholders.size());
+            // Phase 2: WRITE phase - quickly remove collected items (minimal lock time)
+            if (!pathsToRemove.isEmpty()) {
+                lock.writeLock().lock();
+                try {
+                    for (String path : pathsToRemove) {
+                        // Double-check condition while holding lock
+                        PlaceholderInfo info = placeholders.get(path);
+                        if (
+                            info != null &&
+                            info.getState() == PlaceholderState.FAILED &&
+                            (now - info.getCreated()) >
+                            config.getFailedPlaceholderMaxAgeMs()
+                        ) {
+                            placeholders.remove(path);
+                        }
+                    }
+                } finally {
+                    lock.writeLock().unlock();
+                }
 
+                LOGGER.debug(
+                    "Cleanup removed {} failed placeholders",
+                    pathsToRemove.size()
+                );
+            }
+
+            CacheStrategy.UnifiedCacheStatistics stats =
+                cacheStrategy.getStatistics();
+            LOGGER.debug(
+                "Cleanup completed. Cache size: L1={}, L2={}, Placeholders: {}",
+                stats.getL1Size(),
+                stats.getL2Size(),
+                placeholders.size()
+            );
         } catch (Exception e) {
             LOGGER.error("Error during cleanup", e);
         }
@@ -585,6 +713,7 @@ public class PlaceholderManager {
      * Loading task for priority queue.
      */
     private static class LoadingTask implements Comparable<LoadingTask> {
+
         final String path;
         final int priority;
         final boolean urgent;
@@ -605,7 +734,10 @@ public class PlaceholderManager {
             }
 
             // Then by priority (higher priority first)
-            int priorityCompare = Integer.compare(other.priority, this.priority);
+            int priorityCompare = Integer.compare(
+                other.priority,
+                this.priority
+            );
             if (priorityCompare != 0) {
                 return priorityCompare;
             }
@@ -619,6 +751,7 @@ public class PlaceholderManager {
      * Cache statistics container.
      */
     public static class CacheStatistics {
+
         private final long cacheHits;
         private final long cacheMisses;
         private final long cacheSize;
@@ -629,9 +762,17 @@ public class PlaceholderManager {
         private final int placeholderCount;
         private final int queuedLoads;
 
-        public CacheStatistics(long cacheHits, long cacheMisses, long cacheSize, long maxCacheSize,
-                              int cachedFilesCount, long totalLoads, long totalEvictions,
-                              int placeholderCount, int queuedLoads) {
+        public CacheStatistics(
+            long cacheHits,
+            long cacheMisses,
+            long cacheSize,
+            long maxCacheSize,
+            int cachedFilesCount,
+            long totalLoads,
+            long totalEvictions,
+            int placeholderCount,
+            int queuedLoads
+        ) {
             this.cacheHits = cacheHits;
             this.cacheMisses = cacheMisses;
             this.cacheSize = cacheSize;
@@ -643,15 +784,41 @@ public class PlaceholderManager {
             this.queuedLoads = queuedLoads;
         }
 
-        public long getCacheHits() { return cacheHits; }
-        public long getCacheMisses() { return cacheMisses; }
-        public long getCacheSize() { return cacheSize; }
-        public long getMaxCacheSize() { return maxCacheSize; }
-        public int getCachedFilesCount() { return cachedFilesCount; }
-        public long getTotalLoads() { return totalLoads; }
-        public long getTotalEvictions() { return totalEvictions; }
-        public int getPlaceholderCount() { return placeholderCount; }
-        public int getQueuedLoads() { return queuedLoads; }
+        public long getCacheHits() {
+            return cacheHits;
+        }
+
+        public long getCacheMisses() {
+            return cacheMisses;
+        }
+
+        public long getCacheSize() {
+            return cacheSize;
+        }
+
+        public long getMaxCacheSize() {
+            return maxCacheSize;
+        }
+
+        public int getCachedFilesCount() {
+            return cachedFilesCount;
+        }
+
+        public long getTotalLoads() {
+            return totalLoads;
+        }
+
+        public long getTotalEvictions() {
+            return totalEvictions;
+        }
+
+        public int getPlaceholderCount() {
+            return placeholderCount;
+        }
+
+        public int getQueuedLoads() {
+            return queuedLoads;
+        }
 
         public double getHitRatio() {
             long total = cacheHits + cacheMisses;
@@ -664,13 +831,22 @@ public class PlaceholderManager {
 
         @Override
         public String toString() {
-            return String.format("CacheStatistics{hits=%d, misses=%d, hitRatio=%.2f%%, " +
-                               "cacheSize=%d/%d (%.1f%%), files=%d, loads=%d, evictions=%d, " +
-                               "placeholders=%d, queued=%d}",
-                cacheHits, cacheMisses, getHitRatio() * 100,
-                cacheSize, maxCacheSize, getCacheUtilization() * 100,
-                cachedFilesCount, totalLoads, totalEvictions,
-                placeholderCount, queuedLoads);
+            return String.format(
+                "CacheStatistics{hits=%d, misses=%d, hitRatio=%.2f%%, " +
+                    "cacheSize=%d/%d (%.1f%%), files=%d, loads=%d, evictions=%d, " +
+                    "placeholders=%d, queued=%d}",
+                cacheHits,
+                cacheMisses,
+                getHitRatio() * 100,
+                cacheSize,
+                maxCacheSize,
+                getCacheUtilization() * 100,
+                cachedFilesCount,
+                totalLoads,
+                totalEvictions,
+                placeholderCount,
+                queuedLoads
+            );
         }
     }
 }
