@@ -1,0 +1,275 @@
+@startuml
+!theme plain
+title Updated Classes - F1r3DriveFuse & StateChangeEventsManager
+
+package "io.f1r3fly.f1r3drive.app" {
+
+  class F1r3DriveFuse <<UPDATE>> {
+    == EXISTING FIELDS ⚫ ==
+    - fileSystem: InMemoryFileSystem ⚫
+    - stateManager: StateChangeEventsManager ⚫
+    - blockchainClient: F1r3flyBlockchainClient ⚫
+    - cipher: AESCipher ⚫
+    - mountPath: String ⚫
+    - isRunning: boolean ⚫
+
+    == NEW FIELDS 🆕 ==
+    - changeWatcher: ChangeWatcher 🆕
+    - placeholderManager: PlaceholderManager 🆕
+    - changeListener: F1r3DriveChangeListener 🆕
+    - shutdownHook: Thread 🆕
+
+    == EXISTING METHODS ⚫ ==
+    + {static} main(args: String[]): void ⚫
+
+    == UPDATED METHODS 🔄 ==
+    + initialize(mountPath: String, context: BlockchainContext): void 🔄
+    + start(): void 🔄
+    + shutdown(): void 🔄
+
+    == NEW METHODS 🆕 ==
+    + createPlatformChangeWatcher(): ChangeWatcher 🆕
+    + setupPlatformIntegration(mountPath: String): void 🆕
+    + setupChangeListener(): void 🆕
+    + setupShutdownHooks(): void 🆕
+    + preloadBlockchainFiles(): void 🆕
+    + registerBlockchainFile(path: String): void 🆕
+    + unregisterBlockchainFile(path: String): void 🆕
+  }
+
+  class "F1r3DriveChangeListener" <<NEW>> {
+    - stateManager: StateChangeEventsManager
+    - placeholderManager: PlaceholderManager
+    - fileSystem: InMemoryFileSystem
+
+    + F1r3DriveChangeListener(stateManager, placeholderManager, fileSystem)
+    + onFileCreated(path: String, metadata: FileMetadata): void
+    + onFileModified(path: String, metadata: FileMetadata): void
+    + onFileDeleted(path: String): void
+    + onFileAccessed(path: String, accessType: AccessType): void
+    + onDirectoryCreated(path: String): void
+    + onDirectoryDeleted(path: String): void
+    + onError(path: String, error: Exception): void
+    - handlePlaceholderAccess(path: String): void
+    - updateFileSystemFromEvent(path: String, operation: String): void
+  }
+
+  class "BlockchainFileCallback" <<NEW>> {
+    - filePath: String
+    - blockchainClient: F1r3flyBlockchainClient
+    - stateManager: StateChangeEventsManager
+
+    + BlockchainFileCallback(filePath: String, client: F1r3flyBlockchainClient)
+    + onDemandLoad(path: String): CompletableFuture<byte[]>
+    + onPlaceholderUpdate(path: String, info: PlaceholderInfo): void
+    + shouldCache(path: String): boolean
+    - loadFromBlockchain(path: String): CompletableFuture<byte[]>
+    - cacheFileContent(path: String, content: byte[]): void
+  }
+}
+
+package "io.f1r3fly.f1r3drive.state" {
+
+  class StateChangeEventsManager <<UPDATE>> {
+    == EXISTING FIELDS ⚫ ==
+    - eventQueue: EventQueue ⚫
+    - eventProcessorRegistry: EventProcessorRegistry ⚫
+    - executorService: ExecutorService ⚫
+    - isRunning: boolean ⚫
+    - eventStats: EventStatistics ⚫
+
+    == NEW FIELDS 🆕 ==
+    - changeListener: ChangeListener 🆕
+    - externalEventQueue: BlockingQueue<ExternalChangeEvent> 🆕
+    - externalEventProcessor: Thread 🆕
+
+    == EXISTING METHODS ⚫ ==
+    + start(): void ⚫
+    + shutdown(): void ⚫
+    + queueEvent(event: StateChangeEvent): void ⚫
+    + registerEventProcessor(processor: EventProcessor): void ⚫
+    + unregisterEventProcessor(processor: EventProcessor): void ⚫
+    + getEventStatistics(): EventStatistics ⚫
+
+    == UPDATED METHODS 🔄 ==
+    + processEvents(): void 🔄
+
+    == NEW METHODS 🆕 ==
+    + setChangeListener(listener: ChangeListener): void 🆕
+    + notifyFileChange(path: String, type: ChangeType): void 🆕
+    + notifyExternalChange(path: String, type: ChangeType, metadata: Map<String, Object>): void 🆕
+
+    == PRIVATE NEW METHODS 🆕 ==
+    - handleExternalChange(path: String, type: ChangeType): void 🆕
+    - convertToStateChangeEvent(path: String, type: ChangeType): StateChangeEvent 🆕
+    - processExternalEvents(): void 🆕
+    - startExternalEventProcessor(): void 🆕
+    - stopExternalEventProcessor(): void 🆕
+    - validateChangeType(type: ChangeType): void 🆕
+  }
+
+  class "ExternalChangeEvent" <<NEW>> {
+    - path: String
+    - changeType: ChangeType
+    - timestamp: long
+    - metadata: Map<String, Object>
+    - source: String
+
+    + ExternalChangeEvent(path: String, changeType: ChangeType)
+    + ExternalChangeEvent(path: String, changeType: ChangeType, metadata: Map<String, Object>)
+    + getPath(): String
+    + getChangeType(): ChangeType
+    + getTimestamp(): long
+    + getMetadata(): Map<String, Object>
+    + getMetadata(key: String): Object
+    + setMetadata(key: String, value: Object): void
+    + getSource(): String
+    + setSource(source: String): void
+  }
+
+  enum ChangeType <<NEW>> {
+    CREATED
+    MODIFIED
+    DELETED
+    ACCESSED
+    MOVED
+    DIR_CREATED
+    DIR_DELETED
+    PERMISSIONS_CHANGED
+    + toEventType(): EventType
+    + fromEventType(eventType: EventType): ChangeType
+  }
+}
+
+package "Integration Components" <<NEW>> {
+
+  class "PlatformIntegrationManager" <<NEW>> {
+    - changeWatcher: ChangeWatcher
+    - placeholderManager: PlaceholderManager
+    - fileSystem: InMemoryFileSystem
+    - integrationCallbacks: Map<String, IntegrationCallback>
+
+    + initialize(changeWatcher: ChangeWatcher, fileSystem: InMemoryFileSystem): void
+    + registerIntegrationCallback(path: String, callback: IntegrationCallback): void
+    + unregisterIntegrationCallback(path: String): void
+    + syncFilesystemToWatcher(): void
+    + syncWatcherToFilesystem(): void
+    + handleBidirectionalSync(path: String, operation: String): void
+    - validateIntegration(): boolean
+  }
+
+  interface "IntegrationCallback" <<NEW>> {
+    + onFilesystemToWatcher(path: String, operation: String): void
+    + onWatcherToFilesystem(path: String, operation: String): void
+    + onSyncError(path: String, error: Exception): void
+  }
+}
+
+package "Configuration" <<NEW>> {
+
+  class "F1r3DriveConfiguration" <<NEW>> {
+    - platformConfig: PlatformConfiguration
+    - placeholderConfig: PlaceholderConfiguration
+    - cacheConfig: CacheConfiguration
+    - monitoringConfig: MonitoringConfiguration
+
+    + getPlatformConfig(): PlatformConfiguration
+    + getPlaceholderConfig(): PlaceholderConfiguration
+    + getCacheConfig(): CacheConfiguration
+    + getMonitoringConfig(): MonitoringConfiguration
+    + validate(): boolean
+    + {static} loadFromFile(configPath: String): F1r3DriveConfiguration
+    + {static} getDefault(): F1r3DriveConfiguration
+  }
+
+  class "PlatformConfiguration" <<NEW>> {
+    - enableNativeMonitoring: boolean
+    - monitoringThreads: int
+    - eventBufferSize: int
+    - watchRecursively: boolean
+    - ignorePatterns: Set<String>
+
+    + isEnableNativeMonitoring(): boolean
+    + getMonitoringThreads(): int
+    + getEventBufferSize(): int
+    + isWatchRecursively(): boolean
+    + getIgnorePatterns(): Set<String>
+  }
+
+  class "MonitoringConfiguration" <<NEW>> {
+    - enableFileAccess: boolean
+    - enableDirectoryMonitoring: boolean
+    - eventDebounceMs: long
+    - maxEventQueueSize: int
+
+    + isEnableFileAccess(): boolean
+    + isEnableDirectoryMonitoring(): boolean
+    + getEventDebounceMs(): long
+    + getMaxEventQueueSize(): int
+  }
+}
+
+' Relationships
+F1r3DriveFuse *-- "F1r3DriveChangeListener" : creates
+F1r3DriveFuse *-- "BlockchainFileCallback" : creates multiple
+F1r3DriveFuse ..> ChangeWatcher : uses
+F1r3DriveFuse ..> PlaceholderManager : uses
+F1r3DriveFuse ..> PlatformIntegrationManager : uses
+
+"F1r3DriveChangeListener" ..|> ChangeListener : implements
+"F1r3DriveChangeListener" --> StateChangeEventsManager : notifies
+"F1r3DriveChangeListener" --> PlaceholderManager : uses
+
+"BlockchainFileCallback" ..|> FileChangeCallback : implements
+"BlockchainFileCallback" --> F1r3flyBlockchainClient : uses
+
+StateChangeEventsManager *-- "ExternalChangeEvent" : processes
+StateChangeEventsManager ..> ChangeType : uses
+StateChangeEventsManager ..> ChangeListener : notifies
+
+PlatformIntegrationManager ..> "IntegrationCallback" : uses
+PlatformIntegrationManager --> ChangeWatcher : manages
+PlatformIntegrationManager --> PlaceholderManager : coordinates
+
+F1r3DriveConfiguration *-- PlatformConfiguration : contains
+F1r3DriveConfiguration *-- MonitoringConfiguration : contains
+ChangeType ..> EventType : converts to/from
+
+' Update annotations
+note top of F1r3DriveFuse : **MAIN UPDATE**: Entry point class\nAdded 4 new fields\nUpdated 3 methods\nAdded 7 new methods
+
+note right of StateChangeEventsManager : **CORE UPDATE**: State manager\nAdded 2 new fields\nUpdated 1 method\nAdded 9 new methods
+
+note bottom of "F1r3DriveChangeListener" : **NEW**: Main handler for\nplatform events.\nBridge between ChangeWatcher\nand existing system
+
+note left of "ExternalChangeEvent" : **NEW**: Represents external\nchanges from platform\nfor integration with internal\nevent system
+
+' Method details
+note as initializeDetails
+  **F1r3DriveFuse.initialize() Changes:**
+  🔄 Existing: AES setup, filesystem init
+  🆕 NEW: ChangeWatcher creation
+  🆕 NEW: PlaceholderManager setup
+  🆕 NEW: Platform integration config
+end note
+
+note as startDetails
+  **F1r3DriveFuse.start() Changes:**
+  🔄 Existing: Blockchain connect, state start
+  🆕 NEW: ChangeWatcher.startMonitoring()
+  🆕 NEW: Preload blockchain files
+  🆕 NEW: Setup shutdown hooks
+end note
+
+note as shutdownDetails
+  **F1r3DriveFuse.shutdown() Changes:**
+  🔄 Existing: State shutdown, blockchain disconnect
+  🆕 NEW: ChangeWatcher.cleanup()
+  🆕 NEW: PlaceholderManager.cleanup()
+end note
+
+initializeDetails --> F1r3DriveFuse
+startDetails --> F1r3DriveFuse
+shutdownDetails --> F1r3DriveFuse
+
+@enduml

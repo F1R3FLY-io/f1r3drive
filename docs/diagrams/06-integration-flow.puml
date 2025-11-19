@@ -1,0 +1,163 @@
+@startuml
+!theme plain
+title F1r3Drive Integration Flow - Platform Events to Blockchain
+
+actor User
+participant "File System\n(OS)" as FS
+participant "ChangeWatcher\n🍎🐧🪟" as CW
+participant "ChangeListener\n🆕" as CL
+participant "StateChangeEventsManager\n🔄" as SEM
+participant "InMemoryFileSystem\n⚫" as IFS
+participant "PlaceholderManager\n🆕" as PM
+participant "FileChangeCallback\n🆕" as FCC
+participant "F1r3flyBlockchainClient\n⚫" as BC
+participant "F1r3fly Shard\n(Blockchain)" as SHARD
+
+== File Access (Read Operation) ==
+
+User -> FS : Open file in Finder/Explorer
+FS -> CW : Platform-specific event
+
+alt macOS 🍎
+    CW -> CW : FSEventsMonitor detects access
+    CW -> CW : FileProvider requests content
+else Linux 🐧
+    CW -> CW : InotifyMonitor detects access
+    CW -> CW : FuseFilesystem.read() called
+else Windows 🪟
+    CW -> CW : ReadDirectoryChangesW event
+    CW -> CW : WinFsp requests content
+end
+
+CW -> CL : onFileAccessed(path, READ)
+CL -> SEM : notifyFileChange(path, ACCESSED)
+SEM -> IFS : getNode(path)
+
+alt File exists in memory
+    IFS -> CL : Return existing file
+    CL -> CW : Provide content
+    CW -> FS : Return file data
+    FS -> User : File content displayed
+
+else File is placeholder
+    IFS -> PM : isPlaceholder(path)
+    PM -> CL : true
+    CL -> PM : loadContent(path)
+    PM -> FCC : onDemandLoad(path)
+    FCC -> BC : readFile(path)
+    BC -> SHARD : gRPC query
+    SHARD -> BC : File content
+    BC -> FCC : CompletableFuture<byte[]>
+    FCC -> PM : Content loaded
+    PM -> PM : cacheContent(path, content)
+    PM -> IFS : createFile(path, content)
+    IFS -> SEM : File updated
+    SEM -> CL : onFileModified(path)
+    CL -> CW : Content available
+    CW -> FS : Return file data
+    FS -> User : File content displayed
+end
+
+== File Modification (Write Operation) ==
+
+User -> FS : Save file
+FS -> CW : Platform-specific write event
+
+alt macOS 🍎
+    CW -> CW : FSEventsMonitor detects change
+    CW -> CW : FileProvider receives update
+else Linux 🐧
+    CW -> CW : InotifyMonitor detects change
+    CW -> CW : FuseFilesystem.write() called
+else Windows 🪟
+    CW -> CW : ReadDirectoryChangesW event
+    CW -> CW : WinFsp receives update
+end
+
+CW -> CL : onFileModified(path, metadata)
+CL -> SEM : notifyFileChange(path, MODIFIED)
+SEM -> SEM : processEvent(MODIFIED)
+SEM -> IFS : updateFile(path, content)
+IFS -> PM : clearCache(path)
+PM -> FCC : onPlaceholderUpdate(path, info)
+
+alt Regular file
+    SEM -> BC : writeFile(path, content)
+    BC -> SHARD : gRPC deploy contract
+    SHARD -> BC : Transaction hash
+    BC -> SEM : File stored on blockchain
+
+else Large file (background)
+    SEM -> SEM : Queue for background upload
+    note right : Asynchronous blockchain\nupload for better UX
+end
+
+== File Creation (New File) ==
+
+User -> FS : Create new file
+FS -> CW : Platform-specific create event
+
+CW -> CL : onFileCreated(path, metadata)
+CL -> SEM : notifyFileChange(path, CREATED)
+SEM -> IFS : createFile(path, content)
+
+alt Should be blockchain file
+    IFS -> PM : createPlaceholder(path, info)
+    PM -> FCC : Register callback
+    FCC -> BC : Initial blockchain storage
+    BC -> SHARD : Deploy new contract
+    SHARD -> BC : Contract address
+    BC -> PM : Update placeholder info
+    PM -> CW : Placeholder ready
+
+else Local file only
+    IFS -> SEM : File created locally
+end
+
+CW -> FS : Creation confirmed
+FS -> User : File created
+
+== Error Handling ==
+
+alt Load Error
+    FCC -> PM : Exception during load
+    PM -> CL : onError(path, exception)
+    CL -> CW : Error notification
+    CW -> FS : Error response
+    FS -> User : Show error message
+
+else Blockchain Error
+    BC -> FCC : Connection error
+    FCC -> PM : onPlaceholderUpdate(path, ERROR)
+    PM -> CL : onError(path, exception)
+    CL -> User : Show blockchain error
+end
+
+== Cleanup & Shutdown ==
+
+User -> FS : Unmount / Exit application
+FS -> CW : Cleanup request
+CW -> CL : onMonitoringStopped()
+CL -> SEM : Shutdown state manager
+SEM -> PM : cleanup()
+PM -> PM : Clear all caches
+PM -> FCC : Cleanup callbacks
+CW -> CW : Stop platform monitoring
+
+alt macOS 🍎
+    CW -> CW : FSEventsMonitor.stopMonitoring()
+    CW -> CW : FileProvider.cleanup()
+else Linux 🐧
+    CW -> CW : InotifyMonitor.stopMonitoring()
+    CW -> CW : FuseFilesystem.unmount()
+else Windows 🪟
+    CW -> CW : WindowsMonitor.stopMonitoring()
+    CW -> CW : WinFsp.cleanup()
+end
+
+CW -> BC : disconnect()
+BC -> SHARD : Close gRPC connection
+
+note over User, SHARD : **Key Integration Points:**\n• ChangeWatcher abstracts platform differences\n• PlaceholderManager handles lazy loading\n• StateChangeEventsManager routes events\n• Existing blockchain layer unchanged
+
+@enduml
