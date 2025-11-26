@@ -373,12 +373,85 @@ public class PlaceholderManager {
     }
 
     /**
-     * Gets the current configuration.
+     * Gets the cache configuration.
      *
      * @return cache configuration
      */
     public CacheConfiguration getConfiguration() {
         return config;
+    }
+
+    /**
+     * Checks if a path is managed as a placeholder.
+     *
+     * @param path the path to check
+     * @return true if path is a placeholder
+     */
+    public boolean isPlaceholder(String path) {
+        return placeholders.containsKey(path);
+    }
+
+    /**
+     * Invalidates cached content for a path.
+     *
+     * @param path the path to invalidate
+     * @return true if content was cached and removed
+     */
+    public boolean invalidateCache(String path) {
+        return clearCache(path);
+    }
+
+    /**
+     * Ensures content is loaded for a placeholder path.
+     *
+     * @param path the path to ensure is loaded
+     * @return loaded content or null if loading failed
+     */
+    public byte[] ensureLoaded(String path) {
+        return loadContent(path);
+    }
+
+    /**
+     * Moves a placeholder from one path to another.
+     *
+     * @param oldPath the current path
+     * @param newPath the new path
+     * @return true if placeholder was moved successfully
+     */
+    public boolean movePlaceholder(String oldPath, String newPath) {
+        lock.writeLock().lock();
+        try {
+            PlaceholderInfo info = placeholders.remove(oldPath);
+            if (info != null) {
+                // Update the path in the placeholder info
+                PlaceholderInfo newInfo = new PlaceholderInfo(
+                    newPath,
+                    info.getExpectedSize(),
+                    info.getChecksum(),
+                    info.getPriority(),
+                    System.currentTimeMillis()
+                );
+                placeholders.put(newPath, newInfo);
+
+                // Move any cached content by getting and re-putting
+                Optional<CacheStrategy.CacheResult> cachedContent =
+                    cacheStrategy.get(oldPath);
+                if (cachedContent.isPresent()) {
+                    cacheStrategy.put(
+                        newPath,
+                        cachedContent.get().getContent(),
+                        new CacheStrategy.CacheMetadata(1, false, 0, "file")
+                    );
+                    cacheStrategy.invalidate(oldPath);
+                }
+
+                LOGGER.debug("Moved placeholder: {} -> {}", oldPath, newPath);
+                return true;
+            }
+            return false;
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     /**
