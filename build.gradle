@@ -50,6 +50,45 @@ sourceSets {
         }
     }
 
+    // Platform-specific source sets
+    macos {
+        java {
+            srcDir 'src/macos/java'
+        }
+        resources {
+            srcDir 'src/macos/resources'
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+
+    linux {
+        java {
+            srcDir 'src/linux/java'
+        }
+        resources {
+            srcDir 'src/linux/resources'
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+
+    windows {
+        java {
+            srcDir 'src/windows/java'
+        }
+        resources {
+            srcDir 'src/windows/resources'
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+
+    test {
+        compileClasspath += sourceSets.macos.output + sourceSets.linux.output + sourceSets.windows.output
+        runtimeClasspath += sourceSets.macos.output + sourceSets.linux.output + sourceSets.windows.output
+    }
+
     e2e {
         java {
             srcDir 'src/e2e/java'
@@ -70,6 +109,7 @@ java {
     }
 }
 
+// Default shadowJar task
 shadowJar {
     mergeServiceFiles()
     archiveClassifier = '' // Remove classifier to make this the main JAR
@@ -79,6 +119,102 @@ shadowJar {
         attributes(
                 'Main-Class': 'io.f1r3fly.f1r3drive.app.F1r3DriveCli'
         )
+    }
+
+    // Include platform-specific sources based on platformVariant property
+    def platformVariant = project.findProperty('platformVariant') ?: 'all'
+
+    if (platformVariant == 'macos') {
+        from sourceSets.main.output
+        from sourceSets.macos.output
+        archiveBaseName = 'f1r3drive-macos'
+    } else if (platformVariant == 'linux') {
+        from sourceSets.main.output
+        from sourceSets.linux.output
+        archiveBaseName = 'f1r3drive-linux'
+    } else if (platformVariant == 'windows') {
+        from sourceSets.main.output
+        from sourceSets.windows.output
+        archiveBaseName = 'f1r3drive-windows'
+    } else {
+        // Default: include all platforms
+        from sourceSets.main.output
+        from sourceSets.macos.output
+        from sourceSets.linux.output
+        from sourceSets.windows.output
+    }
+}
+
+// Platform-specific shadowJar tasks
+task shadowJarMacOS(type: com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+    group = 'build'
+    description = 'Build macOS-specific JAR'
+    archiveClassifier = ''
+    archiveBaseName = 'f1r3drive-macos'
+
+    // Use main shadowJar as base configuration
+    dependsOn shadowJar
+
+    // Clear and rebuild
+    from(shadowJar.outputs.files.collect { zipTree(it) }) {
+        // Include everything from main shadowJar
+    }
+    from sourceSets.macos.output
+
+    mergeServiceFiles()
+    relocate 'org.objectweb.asm', 'org.objectweb.asm.shaded'
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+
+    manifest {
+        attributes('Main-Class': 'io.f1r3fly.f1r3drive.app.F1r3DriveCli')
+    }
+}
+
+task shadowJarLinux(type: com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+    group = 'build'
+    description = 'Build Linux-specific JAR'
+    archiveClassifier = ''
+    archiveBaseName = 'f1r3drive-linux'
+
+    // Use main shadowJar as base configuration
+    dependsOn shadowJar
+
+    // Clear and rebuild
+    from(shadowJar.outputs.files.collect { zipTree(it) }) {
+        // Include everything from main shadowJar
+    }
+    from sourceSets.linux.output
+
+    mergeServiceFiles()
+    relocate 'org.objectweb.asm', 'org.objectweb.asm.shaded'
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+
+    manifest {
+        attributes('Main-Class': 'io.f1r3fly.f1r3drive.app.F1r3DriveCli')
+    }
+}
+
+task shadowJarWindows(type: com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+    group = 'build'
+    description = 'Build Windows-specific JAR'
+    archiveClassifier = ''
+    archiveBaseName = 'f1r3drive-windows'
+
+    // Use main shadowJar as base configuration
+    dependsOn shadowJar
+
+    // Clear and rebuild
+    from(shadowJar.outputs.files.collect { zipTree(it) }) {
+        // Include everything from main shadowJar
+    }
+    from sourceSets.windows.output
+
+    mergeServiceFiles()
+    relocate 'org.objectweb.asm', 'org.objectweb.asm.shaded'
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+
+    manifest {
+        attributes('Main-Class': 'io.f1r3fly.f1r3drive.app.F1r3DriveCli')
     }
 }
 
@@ -124,6 +260,16 @@ task e2eTest(type: Test) {
 configurations {
     e2eImplementation.extendsFrom testImplementation
     e2eRuntimeOnly.extendsFrom testRuntimeOnly
+
+    // Platform-specific configurations
+    macosImplementation.extendsFrom implementation
+    macosRuntimeOnly.extendsFrom runtimeOnly
+
+    linuxImplementation.extendsFrom implementation
+    linuxRuntimeOnly.extendsFrom runtimeOnly
+
+    windowsImplementation.extendsFrom implementation
+    windowsRuntimeOnly.extendsFrom runtimeOnly
 }
 
 dependencies {
@@ -131,9 +277,13 @@ dependencies {
     api 'com.github.jnr:jnr-posix:3.1.19'
     api 'com.github.jnr:jnr-constants:0.10.4'
 
+    // FUSE dependencies - needed for existing Linux classes in main sourceset
     implementation 'com.github.serceman:jnr-fuse:0.5.8'
     implementation 'com.github.jnr:jffi:1.3.10'
     implementation 'com.github.jnr:jffi:1.3.10:native'
+
+    // Additional platform-specific FUSE dependencies
+    linuxImplementation 'com.github.serceman:jnr-fuse:0.5.8'
 
     implementation group: 'javax.annotation', name: 'javax.annotation-api', version: '1.3.2'
 
@@ -187,6 +337,40 @@ release {
     newVersionCommitMessage = '[f1r3Drive release] - '
     preTagCommitMessage = '[f1r3Drive release] - pre tag commit: '
     buildTasks = ['clean', 'assemble', 'shadowJar']
+}
+
+// Platform-specific build tasks
+task buildMacOS {
+    group = 'build'
+    description = 'Build macOS-specific JAR with native dependencies'
+    dependsOn shadowJarMacOS
+
+    doLast {
+        println "Built macOS JAR: ${shadowJarMacOS.archiveFile.get().asFile.name}"
+        println "Size: ${shadowJarMacOS.archiveFile.get().asFile.length() / (1024 * 1024)} MB"
+    }
+}
+
+task buildLinux {
+    group = 'build'
+    description = 'Build Linux-specific JAR with FUSE dependencies'
+    dependsOn shadowJarLinux
+
+    doLast {
+        println "Built Linux JAR: ${shadowJarLinux.archiveFile.get().asFile.name}"
+        println "Size: ${shadowJarLinux.archiveFile.get().asFile.length() / (1024 * 1024)} MB"
+    }
+}
+
+task buildWindows {
+    group = 'build'
+    description = 'Build Windows-specific JAR (future implementation)'
+    dependsOn shadowJarWindows
+
+    doLast {
+        println "Built Windows JAR: ${shadowJarWindows.archiveFile.get().asFile.name}"
+        println "Size: ${shadowJarWindows.archiveFile.get().asFile.length() / (1024 * 1024)} MB"
+    }
 }
 
 // Make build depend on shadowJar
@@ -248,6 +432,11 @@ publishing {
 
 
 
+
+// Set duplicates strategy for all resource processing tasks
+tasks.withType(ProcessResources) {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
 
 tasks.named('processResources') {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE // or EXCLUDE, depending on desired behavior
