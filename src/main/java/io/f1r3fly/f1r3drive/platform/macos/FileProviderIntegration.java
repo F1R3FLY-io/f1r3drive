@@ -32,12 +32,16 @@ public class FileProviderIntegration {
     // Native library loading
     static {
         try {
-            System.loadLibrary("f1r3drive-fileprovider");
+            NativeLibraryLoader.loadFileProviderLibrary();
             LOGGER.info("Successfully loaded native File Provider library");
         } catch (UnsatisfiedLinkError e) {
             LOGGER.warn(
                 "Failed to load native File Provider library: {}. File Provider integration will be disabled.",
                 e.getMessage()
+            );
+            LOGGER.warn(
+                "Platform info: {}",
+                NativeLibraryLoader.getPlatformInfo()
             );
         }
     }

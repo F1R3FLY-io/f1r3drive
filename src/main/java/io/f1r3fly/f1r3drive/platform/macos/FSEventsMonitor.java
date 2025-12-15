@@ -1,12 +1,11 @@
 package io.f1r3fly.f1r3drive.platform.macos;
 
 import io.f1r3fly.f1r3drive.platform.ChangeListener;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * JNI integration with macOS FSEvents API for low-level filesystem monitoring.
@@ -17,16 +16,28 @@ import java.util.concurrent.TimeUnit;
  */
 public class FSEventsMonitor {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(FSEventsMonitor.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+        FSEventsMonitor.class
+    );
 
     // Native library loading
     static {
         try {
-            System.loadLibrary("f1r3drive-fsevents");
+            NativeLibraryLoader.loadFSEventsLibrary();
             LOGGER.info("Successfully loaded native FSEvents library");
         } catch (UnsatisfiedLinkError e) {
-            LOGGER.error("Failed to load native FSEvents library: {}", e.getMessage());
-            throw new RuntimeException("Native FSEvents library not available", e);
+            LOGGER.error(
+                "Failed to load native FSEvents library: {}",
+                e.getMessage()
+            );
+            LOGGER.error(
+                "Platform info: {}",
+                NativeLibraryLoader.getPlatformInfo()
+            );
+            throw new RuntimeException(
+                "Native FSEvents library not available",
+                e
+            );
         }
     }
 
@@ -40,10 +51,12 @@ public class FSEventsMonitor {
     // Event flags (from FSEvents.h)
     public static final int kFSEventStreamEventFlagItemCreated = 0x00000100;
     public static final int kFSEventStreamEventFlagItemRemoved = 0x00000200;
-    public static final int kFSEventStreamEventFlagItemInodeMetaMod = 0x00000400;
+    public static final int kFSEventStreamEventFlagItemInodeMetaMod =
+        0x00000400;
     public static final int kFSEventStreamEventFlagItemRenamed = 0x00000800;
     public static final int kFSEventStreamEventFlagItemModified = 0x00001000;
-    public static final int kFSEventStreamEventFlagItemFinderInfoMod = 0x00002000;
+    public static final int kFSEventStreamEventFlagItemFinderInfoMod =
+        0x00002000;
     public static final int kFSEventStreamEventFlagItemChangeOwner = 0x00004000;
     public static final int kFSEventStreamEventFlagItemXattrMod = 0x00008000;
     public static final int kFSEventStreamEventFlagItemIsFile = 0x00010000;
@@ -61,9 +74,10 @@ public class FSEventsMonitor {
 
     // Configuration parameters
     private double latency = 0.1; // 100ms latency
-    private int streamFlags = kFSEventStreamCreateFlagFileEvents |
-                             kFSEventStreamCreateFlagWatchRoot |
-                             kFSEventStreamCreateFlagNoDefer;
+    private int streamFlags =
+        kFSEventStreamCreateFlagFileEvents |
+        kFSEventStreamCreateFlagWatchRoot |
+        kFSEventStreamCreateFlagNoDefer;
 
     /**
      * Creates a new FSEventsMonitor instance.
@@ -79,7 +93,10 @@ public class FSEventsMonitor {
      * @param listener the listener to notify of changes
      * @throws Exception if monitoring cannot be started
      */
-    public synchronized void startMonitoring(String path, ChangeListener listener) throws Exception {
+    public synchronized void startMonitoring(
+        String path,
+        ChangeListener listener
+    ) throws Exception {
         if (isRunning.get()) {
             throw new IllegalStateException("Monitor is already running");
         }
@@ -99,14 +116,19 @@ public class FSEventsMonitor {
         LOGGER.info("Starting FSEvents monitoring for path: {}", path);
 
         // Create and start monitoring thread
-        monitorThread = new Thread(this::runEventLoop, "FSEventsMonitor-" + path.hashCode());
+        monitorThread = new Thread(
+            this::runEventLoop,
+            "FSEventsMonitor-" + path.hashCode()
+        );
         monitorThread.setDaemon(true);
         monitorThread.start();
 
         // Wait for initialization to complete
         if (!startLatch.await(10, TimeUnit.SECONDS)) {
             stopMonitoring();
-            throw new Exception("Failed to start FSEvents monitoring within timeout");
+            throw new Exception(
+                "Failed to start FSEvents monitoring within timeout"
+            );
         }
 
         if (!isInitialized.get()) {
@@ -114,7 +136,10 @@ public class FSEventsMonitor {
             throw new Exception("Failed to initialize FSEvents stream");
         }
 
-        LOGGER.info("FSEvents monitoring started successfully for path: {}", path);
+        LOGGER.info(
+            "FSEvents monitoring started successfully for path: {}",
+            path
+        );
     }
 
     /**
@@ -139,12 +164,16 @@ public class FSEventsMonitor {
         if (monitorThread != null) {
             try {
                 if (!stopLatch.await(5, TimeUnit.SECONDS)) {
-                    LOGGER.warn("FSEvents monitoring thread did not stop gracefully, interrupting");
+                    LOGGER.warn(
+                        "FSEvents monitoring thread did not stop gracefully, interrupting"
+                    );
                     monitorThread.interrupt();
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                LOGGER.warn("Interrupted while waiting for monitoring thread to stop");
+                LOGGER.warn(
+                    "Interrupted while waiting for monitoring thread to stop"
+                );
             }
         }
 
@@ -168,7 +197,9 @@ public class FSEventsMonitor {
      */
     public void setLatency(double latency) {
         if (isRunning.get()) {
-            throw new IllegalStateException("Cannot change latency while monitoring is active");
+            throw new IllegalStateException(
+                "Cannot change latency while monitoring is active"
+            );
         }
         this.latency = latency;
     }
@@ -180,7 +211,9 @@ public class FSEventsMonitor {
      */
     public void setAdditionalStreamFlags(int flags) {
         if (isRunning.get()) {
-            throw new IllegalStateException("Cannot change flags while monitoring is active");
+            throw new IllegalStateException(
+                "Cannot change flags while monitoring is active"
+            );
         }
         this.streamFlags |= flags;
     }
@@ -190,7 +223,10 @@ public class FSEventsMonitor {
      */
     private void runEventLoop() {
         try {
-            LOGGER.debug("Starting FSEvents run loop for path: {}", watchedPath);
+            LOGGER.debug(
+                "Starting FSEvents run loop for path: {}",
+                watchedPath
+            );
 
             isRunning.set(true);
 
@@ -198,7 +234,10 @@ public class FSEventsMonitor {
             streamRef = nativeCreateStream(watchedPath, latency, streamFlags);
 
             if (streamRef == 0) {
-                LOGGER.error("Failed to create FSEvents stream for path: {}", watchedPath);
+                LOGGER.error(
+                    "Failed to create FSEvents stream for path: {}",
+                    watchedPath
+                );
                 isInitialized.set(false);
                 startLatch.countDown();
                 return;
@@ -230,7 +269,6 @@ public class FSEventsMonitor {
 
             // Run the CFRunLoop (this blocks until stopped)
             nativeRunLoop(streamRef);
-
         } catch (Exception e) {
             LOGGER.error("Error in FSEvents run loop", e);
             if (changeListener != null) {
@@ -260,7 +298,11 @@ public class FSEventsMonitor {
      * @param flags array of event flags for each path
      * @param eventIds array of event IDs for each path
      */
-    private void onFileSystemEvent(String[] paths, int[] flags, long[] eventIds) {
+    private void onFileSystemEvent(
+        String[] paths,
+        int[] flags,
+        long[] eventIds
+    ) {
         if (changeListener == null || !isRunning.get()) {
             return;
         }
@@ -270,8 +312,12 @@ public class FSEventsMonitor {
             int eventFlags = flags[i];
             long eventId = eventIds[i];
 
-            LOGGER.debug("FSEvent: path={}, flags=0x{}, eventId={}",
-                        path, Integer.toHexString(eventFlags), eventId);
+            LOGGER.debug(
+                "FSEvent: path={}, flags=0x{}, eventId={}",
+                path,
+                Integer.toHexString(eventFlags),
+                eventId
+            );
 
             try {
                 processEvent(path, eventFlags);
@@ -312,10 +358,14 @@ public class FSEventsMonitor {
         }
 
         // Handle attribute changes
-        if ((flags & (kFSEventStreamEventFlagItemInodeMetaMod |
-                     kFSEventStreamEventFlagItemFinderInfoMod |
-                     kFSEventStreamEventFlagItemChangeOwner |
-                     kFSEventStreamEventFlagItemXattrMod)) != 0) {
+        if (
+            (flags &
+                (kFSEventStreamEventFlagItemInodeMetaMod |
+                    kFSEventStreamEventFlagItemFinderInfoMod |
+                    kFSEventStreamEventFlagItemChangeOwner |
+                    kFSEventStreamEventFlagItemXattrMod)) !=
+            0
+        ) {
             changeListener.onFileAttributesChanged(path);
         }
     }
@@ -340,7 +390,11 @@ public class FSEventsMonitor {
      * @param flags the stream creation flags
      * @return native stream reference or 0 on failure
      */
-    private native long nativeCreateStream(String path, double latency, int flags);
+    private native long nativeCreateStream(
+        String path,
+        double latency,
+        int flags
+    );
 
     /**
      * Schedules the stream on the current thread's run loop.
