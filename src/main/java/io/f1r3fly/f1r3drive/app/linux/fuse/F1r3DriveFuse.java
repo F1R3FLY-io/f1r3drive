@@ -9,6 +9,7 @@ import io.f1r3fly.f1r3drive.filesystem.InMemoryFileSystem;
 import io.f1r3fly.f1r3drive.filesystem.OperationContext;
 import io.f1r3fly.f1r3drive.filesystem.utils.PathUtils;
 import io.f1r3fly.f1r3drive.finderextensions.FinderSyncExtensionServiceServer;
+import io.f1r3fly.f1r3drive.folders.AutoStartTokenDiscovery;
 import io.f1r3fly.f1r3drive.placeholder.CacheConfiguration;
 import io.f1r3fly.f1r3drive.placeholder.PlaceholderInfo;
 import io.f1r3fly.f1r3drive.placeholder.PlaceholderManager;
@@ -55,9 +56,47 @@ public class F1r3DriveFuse extends FuseStubFS {
     private F1r3DriveChangeListener changeListener;
     private Thread shutdownHook;
 
+    // Token discovery system for automatic blockchain folder creation
+    private AutoStartTokenDiscovery tokenDiscovery;
+
     public F1r3DriveFuse(F1r3flyBlockchainClient f1R3FlyBlockchainClient) {
         super(); // no need to call Fuse constructor?
         this.f1R3FlyBlockchainClient = f1R3FlyBlockchainClient; // doesnt have a state, so can be reused between mounts
+
+        // Initialize automatic token discovery system
+        initializeTokenDiscovery();
+    }
+
+    /**
+     * Initialize automatic token discovery system
+     */
+    private void initializeTokenDiscovery() {
+        try {
+            LOGGER.info("Starting automatic blockchain token discovery...");
+            tokenDiscovery = AutoStartTokenDiscovery.createSafely(
+                f1R3FlyBlockchainClient
+            );
+
+            if (tokenDiscovery != null) {
+                LOGGER.info("✓ Token discovery system initialized");
+                LOGGER.info(
+                    "Demo folders will be created in: /Users/jedoan/demo-f1r3drive"
+                );
+            } else {
+                LOGGER.warn(
+                    "Token discovery system could not be initialized - continuing without it"
+                );
+            }
+        } catch (Exception e) {
+            LOGGER.error("Failed to initialize token discovery system", e);
+        }
+    }
+
+    /**
+     * Gets the current token discovery system
+     */
+    public AutoStartTokenDiscovery getTokenDiscovery() {
+        return tokenDiscovery;
     }
 
     /**
@@ -110,6 +149,43 @@ public class F1r3DriveFuse extends FuseStubFS {
                         e
                     );
                 }
+            }
+
+            /**
+             * Initialize automatic token discovery system
+             */
+            private void initializeTokenDiscovery() {
+                try {
+                    LOGGER.info(
+                        "Starting automatic blockchain token discovery..."
+                    );
+                    tokenDiscovery = AutoStartTokenDiscovery.createSafely(
+                        f1R3FlyBlockchainClient
+                    );
+
+                    if (tokenDiscovery != null) {
+                        LOGGER.info("✓ Token discovery system initialized");
+                        LOGGER.info(
+                            "Demo folders will be created in: /Users/jedoan/demo-f1r3drive"
+                        );
+                    } else {
+                        LOGGER.warn(
+                            "Token discovery system could not be initialized - continuing without it"
+                        );
+                    }
+                } catch (Exception e) {
+                    LOGGER.error(
+                        "Failed to initialize token discovery system",
+                        e
+                    );
+                }
+            }
+
+            /**
+             * Gets the current token discovery system
+             */
+            public AutoStartTokenDiscovery getTokenDiscovery() {
+                return tokenDiscovery;
             }
 
             @Override
@@ -983,6 +1059,16 @@ public class F1r3DriveFuse extends FuseStubFS {
         } else {
             LOGGER.debug(
                 "FinderSyncExtensionServiceServer was already null, skipping stop"
+            );
+        }
+        if (this.tokenDiscovery != null) {
+            LOGGER.debug("Shutting down token discovery system...");
+            this.tokenDiscovery.shutdown();
+            this.tokenDiscovery = null;
+            LOGGER.debug("Token discovery system shutdown complete");
+        } else {
+            LOGGER.debug(
+                "Token discovery system was already null, skipping shutdown"
             );
         }
         LOGGER.debug("Resource cleanup completed");

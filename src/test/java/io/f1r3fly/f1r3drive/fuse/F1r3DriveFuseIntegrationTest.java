@@ -1,6 +1,7 @@
 package io.f1r3fly.f1r3drive.fuse;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -18,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -48,6 +50,17 @@ class F1r3DriveFuseIntegrationTest {
     private F1r3DriveFuse f1r3DriveFuse;
     private String testMountPath;
 
+    @BeforeAll
+    static void checkPlatformSupport() {
+        // Skip all tests on non-Linux platforms since FUSE is not available
+        String osName = System.getProperty("os.name").toLowerCase();
+        assumeTrue(
+            osName.contains("linux"),
+            "FUSE integration tests require Linux platform. Current OS: " +
+                osName
+        );
+    }
+
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
@@ -55,8 +68,12 @@ class F1r3DriveFuseIntegrationTest {
         // Setup test mount path
         testMountPath = tempDir.resolve("test-mount").toString();
 
-        // Create F1r3DriveFuse instance
-        f1r3DriveFuse = new F1r3DriveFuse(mockBlockchainClient);
+        // Create F1r3DriveFuse instance - this will fail on non-Linux platforms
+        try {
+            f1r3DriveFuse = new F1r3DriveFuse(mockBlockchainClient);
+        } catch (UnsatisfiedLinkError e) {
+            assumeTrue(false, "FUSE library not available: " + e.getMessage());
+        }
 
         // Create real RevWalletInfo instead of mocking
         testWalletInfo = new RevWalletInfo(
@@ -282,6 +299,13 @@ class F1r3DriveFuseIntegrationTest {
     @Test
     void testPlaceholderManagerIntegration() throws Exception {
         // Test that PlaceholderManager methods work correctly
+        // This test specifically verifies that FUSE integration works with PlaceholderManager
+
+        // Skip if FUSE is not available
+        assumeTrue(
+            f1r3DriveFuse != null,
+            "FUSE not available - skipping integration test"
+        );
 
         try (
             MockedStatic<ChangeWatcherFactory> factoryMock = mockStatic(
@@ -297,6 +321,12 @@ class F1r3DriveFuseIntegrationTest {
             // The PlaceholderManager should be created and functional
             // We can't access it directly, but we can test that the system starts without errors
             assertDoesNotThrow(() -> f1r3DriveFuse.start(testMountPath));
+
+            // Verify that the integration completed successfully
+            verify(mockChangeWatcher).startMonitoring(
+                eq(testMountPath),
+                any(ChangeListener.class)
+            );
         }
     }
 

@@ -15,10 +15,9 @@ import java.util.Optional;
  * - L1 (Memory): Fast access, limited size, managed by Caffeine
  * - L2 (Disk): Larger capacity, persistent across restarts
  *
- * @since Phase 3: Architecture Refinement
+ * Cache strategy interface for flexible caching implementations
  */
 public interface CacheStrategy {
-
     /**
      * Cache levels enumeration for tiered caching strategy.
      */
@@ -43,22 +42,39 @@ public interface CacheStrategy {
      * Cache operation result with metadata.
      */
     class CacheResult {
+
         private final byte[] content;
         private final CacheLevel hitLevel;
         private final long accessTime;
         private final boolean wasPromoted;
 
-        public CacheResult(byte[] content, CacheLevel hitLevel, long accessTime, boolean wasPromoted) {
+        public CacheResult(
+            byte[] content,
+            CacheLevel hitLevel,
+            long accessTime,
+            boolean wasPromoted
+        ) {
             this.content = content;
             this.hitLevel = hitLevel;
             this.accessTime = accessTime;
             this.wasPromoted = wasPromoted;
         }
 
-        public byte[] getContent() { return content; }
-        public CacheLevel getHitLevel() { return hitLevel; }
-        public long getAccessTime() { return accessTime; }
-        public boolean wasPromoted() { return wasPromoted; }
+        public byte[] getContent() {
+            return content;
+        }
+
+        public CacheLevel getHitLevel() {
+            return hitLevel;
+        }
+
+        public long getAccessTime() {
+            return accessTime;
+        }
+
+        public boolean wasPromoted() {
+            return wasPromoted;
+        }
     }
 
     /**
@@ -145,12 +161,18 @@ public interface CacheStrategy {
      * Metadata for cache storage decisions.
      */
     class CacheMetadata {
+
         private final int priority;
         private final boolean persistent;
         private final long expectedAccessFrequency;
         private final String contentType;
 
-        public CacheMetadata(int priority, boolean persistent, long expectedAccessFrequency, String contentType) {
+        public CacheMetadata(
+            int priority,
+            boolean persistent,
+            long expectedAccessFrequency,
+            String contentType
+        ) {
             this.priority = priority;
             this.persistent = persistent;
             this.expectedAccessFrequency = expectedAccessFrequency;
@@ -165,16 +187,28 @@ public interface CacheStrategy {
             return new CacheMetadata(10, true, 100, "application/octet-stream");
         }
 
-        public int getPriority() { return priority; }
-        public boolean isPersistent() { return persistent; }
-        public long getExpectedAccessFrequency() { return expectedAccessFrequency; }
-        public String getContentType() { return contentType; }
+        public int getPriority() {
+            return priority;
+        }
+
+        public boolean isPersistent() {
+            return persistent;
+        }
+
+        public long getExpectedAccessFrequency() {
+            return expectedAccessFrequency;
+        }
+
+        public String getContentType() {
+            return contentType;
+        }
     }
 
     /**
      * Unified cache statistics across all cache levels.
      */
     class UnifiedCacheStatistics {
+
         private final long l1Hits;
         private final long l2Hits;
         private final long misses;
@@ -183,8 +217,15 @@ public interface CacheStrategy {
         private final long promotions;
         private final long evictions;
 
-        public UnifiedCacheStatistics(long l1Hits, long l2Hits, long misses,
-                                    long l1Size, long l2Size, long promotions, long evictions) {
+        public UnifiedCacheStatistics(
+            long l1Hits,
+            long l2Hits,
+            long misses,
+            long l1Size,
+            long l2Size,
+            long promotions,
+            long evictions
+        ) {
             this.l1Hits = l1Hits;
             this.l2Hits = l2Hits;
             this.misses = misses;
@@ -194,14 +235,37 @@ public interface CacheStrategy {
             this.evictions = evictions;
         }
 
-        public long getTotalHits() { return l1Hits + l2Hits; }
-        public long getL1Hits() { return l1Hits; }
-        public long getL2Hits() { return l2Hits; }
-        public long getMisses() { return misses; }
-        public long getL1Size() { return l1Size; }
-        public long getL2Size() { return l2Size; }
-        public long getPromotions() { return promotions; }
-        public long getEvictions() { return evictions; }
+        public long getTotalHits() {
+            return l1Hits + l2Hits;
+        }
+
+        public long getL1Hits() {
+            return l1Hits;
+        }
+
+        public long getL2Hits() {
+            return l2Hits;
+        }
+
+        public long getMisses() {
+            return misses;
+        }
+
+        public long getL1Size() {
+            return l1Size;
+        }
+
+        public long getL2Size() {
+            return l2Size;
+        }
+
+        public long getPromotions() {
+            return promotions;
+        }
+
+        public long getEvictions() {
+            return evictions;
+        }
 
         public double getHitRatio() {
             long total = getTotalHits() + misses;

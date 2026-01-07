@@ -3,14 +3,13 @@ package io.f1r3fly.f1r3drive.cache;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalListener;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Memory-only cache strategy using only Caffeine cache in RAM.
@@ -27,11 +26,13 @@ import java.util.concurrent.atomic.AtomicLong;
  * - High-frequency access patterns where speed > persistence
  * - Development/testing environments
  *
- * @since Phase 3: Architecture Refinement
+ * Memory-only cache implementation using Caffeine
  */
 public class MemoryOnlyCacheStrategy implements CacheStrategy {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(MemoryOnlyCacheStrategy.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+        MemoryOnlyCacheStrategy.class
+    );
 
     // Configuration
     private final long maxCacheSize;
@@ -51,7 +52,10 @@ public class MemoryOnlyCacheStrategy implements CacheStrategy {
      * @param maxCacheSize maximum cache size in bytes
      * @param expireAfterAccessMs expiration time after last access
      */
-    public MemoryOnlyCacheStrategy(long maxCacheSize, long expireAfterAccessMs) {
+    public MemoryOnlyCacheStrategy(
+        long maxCacheSize,
+        long expireAfterAccessMs
+    ) {
         this.maxCacheSize = maxCacheSize;
         this.expireAfterAccessMs = expireAfterAccessMs;
 
@@ -60,18 +64,27 @@ public class MemoryOnlyCacheStrategy implements CacheStrategy {
             .maximumWeight(maxCacheSize)
             .weigher((String key, byte[] value) -> value.length)
             .expireAfterAccess(expireAfterAccessMs, TimeUnit.MILLISECONDS)
-            .removalListener((RemovalListener<String, byte[]>) (key, value, cause) -> {
-                if (value != null) {
-                    totalEvictions.incrementAndGet();
-                    LOGGER.debug("Memory cache eviction: path={}, size={}, cause={}",
-                        key, value.length, cause);
+            .removalListener(
+                (RemovalListener<String, byte[]>) (key, value, cause) -> {
+                    if (value != null) {
+                        totalEvictions.incrementAndGet();
+                        LOGGER.debug(
+                            "Memory cache eviction: path={}, size={}, cause={}",
+                            key,
+                            value.length,
+                            cause
+                        );
+                    }
                 }
-            })
+            )
             .recordStats()
             .build();
 
-        LOGGER.info("MemoryOnlyCacheStrategy initialized: maxSize={}MB, expireAfter={}ms",
-            maxCacheSize / (1024 * 1024), expireAfterAccessMs);
+        LOGGER.info(
+            "MemoryOnlyCacheStrategy initialized: maxSize={}MB, expireAfter={}ms",
+            maxCacheSize / (1024 * 1024),
+            expireAfterAccessMs
+        );
     }
 
     @Override
@@ -81,8 +94,14 @@ public class MemoryOnlyCacheStrategy implements CacheStrategy {
         byte[] content = memoryCache.getIfPresent(filePath);
         if (content != null) {
             cacheHits.incrementAndGet();
-            LOGGER.debug("Memory cache hit: {} (size={})", filePath, content.length);
-            return Optional.of(new CacheResult(content, CacheLevel.MEMORY, startTime, false));
+            LOGGER.debug(
+                "Memory cache hit: {} (size={})",
+                filePath,
+                content.length
+            );
+            return Optional.of(
+                new CacheResult(content, CacheLevel.MEMORY, startTime, false)
+            );
         }
 
         // Cache miss
@@ -101,14 +120,22 @@ public class MemoryOnlyCacheStrategy implements CacheStrategy {
 
         // Check if content fits in cache
         if (contentSize > maxCacheSize) {
-            LOGGER.warn("Content too large for memory cache: {} (size={}MB, maxSize={}MB)",
-                filePath, contentSize / (1024 * 1024), maxCacheSize / (1024 * 1024));
+            LOGGER.warn(
+                "Content too large for memory cache: {} (size={}MB, maxSize={}MB)",
+                filePath,
+                contentSize / (1024 * 1024),
+                maxCacheSize / (1024 * 1024)
+            );
             return;
         }
 
         // Store in memory cache
         memoryCache.put(filePath, content);
-        LOGGER.debug("Content cached in memory: {} (size={})", filePath, contentSize);
+        LOGGER.debug(
+            "Content cached in memory: {} (size={})",
+            filePath,
+            contentSize
+        );
     }
 
     @Override
@@ -125,7 +152,10 @@ public class MemoryOnlyCacheStrategy implements CacheStrategy {
     public void invalidateAll() {
         long sizeBefore = memoryCache.estimatedSize();
         memoryCache.invalidateAll();
-        LOGGER.info("Invalidated all memory cache content: {} items removed", sizeBefore);
+        LOGGER.info(
+            "Invalidated all memory cache content: {} items removed",
+            sizeBefore
+        );
     }
 
     @Override
@@ -136,16 +166,17 @@ public class MemoryOnlyCacheStrategy implements CacheStrategy {
 
     @Override
     public UnifiedCacheStatistics getStatistics() {
-        com.github.benmanes.caffeine.cache.stats.CacheStats stats = memoryCache.stats();
+        com.github.benmanes.caffeine.cache.stats.CacheStats stats =
+            memoryCache.stats();
 
         return new UnifiedCacheStatistics(
-            cacheHits.get(),           // l1Hits (memory hits)
-            0,                         // l2Hits (no disk cache)
-            cacheMisses.get(),         // misses
+            cacheHits.get(), // l1Hits (memory hits)
+            0, // l2Hits (no disk cache)
+            cacheMisses.get(), // misses
             memoryCache.estimatedSize(), // l1Size
-            0,                         // l2Size (no disk cache)
-            0,                         // promotions (no L2 to promote from)
-            totalEvictions.get()       // evictions
+            0, // l2Size (no disk cache)
+            0, // promotions (no L2 to promote from)
+            totalEvictions.get() // evictions
         );
     }
 
@@ -168,8 +199,11 @@ public class MemoryOnlyCacheStrategy implements CacheStrategy {
         memoryCache.cleanUp();
 
         UnifiedCacheStatistics stats = getStatistics();
-        LOGGER.debug("Memory cache maintenance completed. Size: {}, Hit ratio: {:.2f}%",
-            stats.getL1Size(), stats.getHitRatio() * 100);
+        LOGGER.debug(
+            "Memory cache maintenance completed. Size: {}, Hit ratio: {:.2f}%",
+            stats.getL1Size(),
+            stats.getHitRatio() * 100
+        );
     }
 
     /**
@@ -178,7 +212,8 @@ public class MemoryOnlyCacheStrategy implements CacheStrategy {
      * @return memory usage information
      */
     public MemoryUsageStats getMemoryUsage() {
-        com.github.benmanes.caffeine.cache.stats.CacheStats stats = memoryCache.stats();
+        com.github.benmanes.caffeine.cache.stats.CacheStats stats =
+            memoryCache.stats();
 
         return new MemoryUsageStats(
             memoryCache.estimatedSize(),
@@ -193,13 +228,20 @@ public class MemoryOnlyCacheStrategy implements CacheStrategy {
      * Memory usage statistics for monitoring.
      */
     public static class MemoryUsageStats {
+
         private final long currentSize;
         private final long maxSize;
         private final long hits;
         private final long misses;
         private final long evictions;
 
-        public MemoryUsageStats(long currentSize, long maxSize, long hits, long misses, long evictions) {
+        public MemoryUsageStats(
+            long currentSize,
+            long maxSize,
+            long hits,
+            long misses,
+            long evictions
+        ) {
             this.currentSize = currentSize;
             this.maxSize = maxSize;
             this.hits = hits;
@@ -207,11 +249,25 @@ public class MemoryOnlyCacheStrategy implements CacheStrategy {
             this.evictions = evictions;
         }
 
-        public long getCurrentSize() { return currentSize; }
-        public long getMaxSize() { return maxSize; }
-        public long getHits() { return hits; }
-        public long getMisses() { return misses; }
-        public long getEvictions() { return evictions; }
+        public long getCurrentSize() {
+            return currentSize;
+        }
+
+        public long getMaxSize() {
+            return maxSize;
+        }
+
+        public long getHits() {
+            return hits;
+        }
+
+        public long getMisses() {
+            return misses;
+        }
+
+        public long getEvictions() {
+            return evictions;
+        }
 
         public double getUtilization() {
             return maxSize > 0 ? (double) currentSize / maxSize : 0.0;
@@ -226,8 +282,13 @@ public class MemoryOnlyCacheStrategy implements CacheStrategy {
         public String toString() {
             return String.format(
                 "MemoryUsage{size=%d/%d (%.1f%%), hits=%d, misses=%d, hitRatio=%.2f%%, evictions=%d}",
-                currentSize, maxSize, getUtilization() * 100,
-                hits, misses, getHitRatio() * 100, evictions
+                currentSize,
+                maxSize,
+                getUtilization() * 100,
+                hits,
+                misses,
+                getHitRatio() * 100,
+                evictions
             );
         }
     }

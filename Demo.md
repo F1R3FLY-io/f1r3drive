@@ -23,6 +23,7 @@ Local shard will be configured with the following configurations:
 - [REV Addresses (wallets.txt)](./local-shard/genesis/wallets.txt)
 - nodes (see [local-shard/shard-with-autopropose.yml](local-shard/shard-with-autopropose.yml) for Node configs): 
   - bootstrap node: `localhost:40412`
+  - validator node: `localhost:40402`
   - observer node: `localhost:40442`
 
 **Note**: Make sure you have a `.env` file in the `local-shard/` directory with the required environment variables before running docker-compose.
@@ -34,26 +35,31 @@ Local shard will be configured with the following configurations:
 2. Run F1r3Drive app with REV Address and Private key. That must be assosiated with some REV address from [wallets.txt](./local-shard/data/genesis/wallets.txt):
 
 **Manual Propose Option:**
-- `--manual-propose true`: Manual deployment flow with propose and finalization waiting (for development/testing only)
-- `--manual-propose false`: Deploy only, skip propose and finalization waiting (production shards will do auto-propose)
+- `--manual-propose=true`: Manual deployment flow with propose and finalization waiting (for development/testing only)
+- `--manual-propose=false`: Deploy only, skip propose and finalization waiting (production shards will do auto-propose)
+
+**macOS Version:**
+For macOS, use the platform-specific JAR file `f1r3drive-macos-0.1.1.jar` which includes native macOS integration and Caffeine-based caching for optimal performance.
 
 - If you build the jar locally, run:
 ```sh
-java -jar ./build/libs/f1r3drive-0.1.1.jar ~/demo-f1r3drive \
+java -jar ./build/libs/f1r3drive-macos-0.1.1.jar ~/demo-f1r3drive \
    --cipher-key-path ~/cipher.key \
    --validator-host localhost --validator-port 40402 \
-   --observer-host localhost --observer-port 40412 \
-   --manual-propose=false \
-   --rev-address 111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA --private-key 357cdc4201a5650830e0bc5a03299a30038d9934ba4c7ab73ec164ad82471ff9
+   --observer-host localhost --observer-port 40442 \
+   --manual-propose=true \
+   --rev-address 111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA \
+   --private-key 357cdc4201a5650830e0bc5a03299a30038d9934ba4c7ab73ec164ad82471ff9
 ```
 - If you downloaded the JAR to your `~/Downloads` folder, run:
 ```sh
-java -jar ~/Downloads/f1r3drive-0.1.1.jar ~/demo-f1r3drive \
+java -jar ~/Downloads/f1r3drive-macos-0.1.1.jar ~/demo-f1r3drive \
    --cipher-key-path ~/cipher.key \
    --validator-host localhost --validator-port 40402 \
-   --observer-host localhost --observer-port 40412 \
-   --manual-propose=false \
-   --rev-address 111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA --private-key 357cdc4201a5650830e0bc5a03299a30038d9934ba4c7ab73ec164ad82471ff9
+   --observer-host localhost --observer-port 40442 \
+   --manual-propose=true \
+   --rev-address 111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA \
+   --private-key 357cdc4201a5650830e0bc5a03299a30038d9934ba4c7ab73ec164ad82471ff9
 ```
 
 # Demo

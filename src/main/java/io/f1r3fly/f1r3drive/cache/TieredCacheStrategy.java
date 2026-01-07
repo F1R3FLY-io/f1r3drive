@@ -3,9 +3,6 @@ package io.f1r3fly.f1r3drive.cache;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalListener;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +11,8 @@ import java.nio.file.StandardOpenOption;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Tiered cache strategy implementation with L1 memory cache and L2 disk cache.
@@ -29,11 +28,13 @@ import java.util.concurrent.atomic.AtomicLong;
  * - Files >= memoryThreshold: Stored in L2 only
  * - Hot files: Automatically promoted to L1
  *
- * @since Phase 3: Architecture Refinement
+ * Tiered cache implementation with memory and disk layers
  */
 public class TieredCacheStrategy implements CacheStrategy {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(TieredCacheStrategy.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+        TieredCacheStrategy.class
+    );
 
     // Configuration
     private final long maxMemoryCacheSize;
@@ -63,9 +64,13 @@ public class TieredCacheStrategy implements CacheStrategy {
      * @param maxDiskCacheSize maximum size for L2 disk cache in bytes
      * @param expireAfterAccessMs expiration time for memory cache entries
      */
-    public TieredCacheStrategy(long maxMemoryCacheSize, long memoryThreshold,
-                             Path diskCacheDirectory, long maxDiskCacheSize,
-                             long expireAfterAccessMs) {
+    public TieredCacheStrategy(
+        long maxMemoryCacheSize,
+        long memoryThreshold,
+        Path diskCacheDirectory,
+        long maxDiskCacheSize,
+        long expireAfterAccessMs
+    ) {
         this.maxMemoryCacheSize = maxMemoryCacheSize;
         this.memoryThreshold = memoryThreshold;
         this.diskCacheDirectory = diskCacheDirectory;
@@ -79,23 +84,34 @@ public class TieredCacheStrategy implements CacheStrategy {
             .maximumWeight(maxMemoryCacheSize)
             .weigher((String key, byte[] value) -> value.length)
             .expireAfterAccess(expireAfterAccessMs, TimeUnit.MILLISECONDS)
-            .removalListener((RemovalListener<String, byte[]>) (key, value, cause) -> {
-                if (value != null) {
-                    totalEvictions.incrementAndGet();
-                    LOGGER.debug("L1 cache eviction: path={}, size={}, cause={}",
-                        key, value.length, cause);
+            .removalListener(
+                (RemovalListener<String, byte[]>) (key, value, cause) -> {
+                    if (value != null) {
+                        totalEvictions.incrementAndGet();
+                        LOGGER.debug(
+                            "L1 cache eviction: path={}, size={}, cause={}",
+                            key,
+                            value.length,
+                            cause
+                        );
+                    }
                 }
-            })
+            )
             .recordStats()
             .build();
 
         // Initialize L2 disk cache manager
-        this.diskCacheManager = new DiskCacheManager(diskCacheDirectory, maxDiskCacheSize);
+        this.diskCacheManager = new DiskCacheManager(
+            diskCacheDirectory,
+            maxDiskCacheSize
+        );
 
-        LOGGER.info("TieredCacheStrategy initialized: L1={}MB, L2={}MB, threshold={}KB",
+        LOGGER.info(
+            "TieredCacheStrategy initialized: L1={}MB, L2={}MB, threshold={}KB",
             maxMemoryCacheSize / (1024 * 1024),
             maxDiskCacheSize / (1024 * 1024),
-            memoryThreshold / 1024);
+            memoryThreshold / 1024
+        );
     }
 
     @Override
@@ -107,7 +123,9 @@ public class TieredCacheStrategy implements CacheStrategy {
         if (l1Content != null) {
             l1Hits.incrementAndGet();
             LOGGER.debug("L1 cache hit: {}", filePath);
-            return Optional.of(new CacheResult(l1Content, CacheLevel.MEMORY, startTime, false));
+            return Optional.of(
+                new CacheResult(l1Content, CacheLevel.MEMORY, startTime, false)
+            );
         }
 
         // Try L2 (disk) cache
@@ -122,13 +140,22 @@ public class TieredCacheStrategy implements CacheStrategy {
                 memoryCache.put(filePath, content);
                 promotions.incrementAndGet();
                 promoted = true;
-                LOGGER.debug("L2 cache hit with L1 promotion: {} (size={})", filePath, content.length);
+                LOGGER.debug(
+                    "L2 cache hit with L1 promotion: {} (size={})",
+                    filePath,
+                    content.length
+                );
             } else {
-                LOGGER.debug("L2 cache hit (no promotion, size too large): {} (size={})",
-                    filePath, content.length);
+                LOGGER.debug(
+                    "L2 cache hit (no promotion, size too large): {} (size={})",
+                    filePath,
+                    content.length
+                );
             }
 
-            return Optional.of(new CacheResult(content, CacheLevel.DISK, startTime, promoted));
+            return Optional.of(
+                new CacheResult(content, CacheLevel.DISK, startTime, promoted)
+            );
         }
 
         // Cache miss
@@ -156,9 +183,17 @@ public class TieredCacheStrategy implements CacheStrategy {
         // Store in L1 (memory) if content is small enough or high priority
         if (contentSize < memoryThreshold || metadata.getPriority() >= 10) {
             memoryCache.put(filePath, content);
-            LOGGER.debug("Content cached in both L1 and L2: {} (size={})", filePath, contentSize);
+            LOGGER.debug(
+                "Content cached in both L1 and L2: {} (size={})",
+                filePath,
+                contentSize
+            );
         } else {
-            LOGGER.debug("Content cached in L2 only: {} (size={})", filePath, contentSize);
+            LOGGER.debug(
+                "Content cached in L2 only: {} (size={})",
+                filePath,
+                contentSize
+            );
         }
     }
 
@@ -173,7 +208,12 @@ public class TieredCacheStrategy implements CacheStrategy {
 
         boolean removed = l1Removed || l2Removed;
         if (removed) {
-            LOGGER.debug("Invalidated from cache: {} (L1={}, L2={})", filePath, l1Removed, l2Removed);
+            LOGGER.debug(
+                "Invalidated from cache: {} (L1={}, L2={})",
+                filePath,
+                l1Removed,
+                l2Removed
+            );
         }
 
         return removed;
@@ -198,7 +238,11 @@ public class TieredCacheStrategy implements CacheStrategy {
         if (content.isPresent() && content.get().length < memoryThreshold) {
             memoryCache.put(filePath, content.get());
             promotions.incrementAndGet();
-            LOGGER.debug("Promoted to L1: {} (size={})", filePath, content.get().length);
+            LOGGER.debug(
+                "Promoted to L1: {} (size={})",
+                filePath,
+                content.get().length
+            );
             return true;
         }
 
@@ -220,8 +264,10 @@ public class TieredCacheStrategy implements CacheStrategy {
 
     @Override
     public boolean contains(String filePath) {
-        return memoryCache.getIfPresent(filePath) != null ||
-               diskCacheManager.contains(filePath);
+        return (
+            memoryCache.getIfPresent(filePath) != null ||
+            diskCacheManager.contains(filePath)
+        );
     }
 
     @Override
@@ -245,10 +291,16 @@ public class TieredCacheStrategy implements CacheStrategy {
     private void initializeDiskCache() {
         try {
             Files.createDirectories(diskCacheDirectory);
-            LOGGER.info("Disk cache directory initialized: {}", diskCacheDirectory);
+            LOGGER.info(
+                "Disk cache directory initialized: {}",
+                diskCacheDirectory
+            );
         } catch (IOException e) {
-            throw new RuntimeException("Failed to initialize disk cache directory: " +
-                diskCacheDirectory, e);
+            throw new RuntimeException(
+                "Failed to initialize disk cache directory: " +
+                    diskCacheDirectory,
+                e
+            );
         }
     }
 
@@ -256,7 +308,10 @@ public class TieredCacheStrategy implements CacheStrategy {
      * Disk cache manager for L2 cache operations.
      */
     private static class DiskCacheManager {
-        private static final Logger LOGGER = LoggerFactory.getLogger(DiskCacheManager.class);
+
+        private static final Logger LOGGER = LoggerFactory.getLogger(
+            DiskCacheManager.class
+        );
         private static final String CACHE_FILE_EXTENSION = ".cache";
 
         private final Path cacheDirectory;
@@ -277,8 +332,12 @@ public class TieredCacheStrategy implements CacheStrategy {
             try {
                 byte[] content = Files.readAllBytes(cacheFile);
                 // Update access time
-                Files.setLastModifiedTime(cacheFile,
-                    java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis()));
+                Files.setLastModifiedTime(
+                    cacheFile,
+                    java.nio.file.attribute.FileTime.fromMillis(
+                        System.currentTimeMillis()
+                    )
+                );
                 return Optional.of(content);
             } catch (IOException e) {
                 LOGGER.warn("Failed to read from disk cache: {}", cacheFile, e);
@@ -289,8 +348,13 @@ public class TieredCacheStrategy implements CacheStrategy {
         public void put(String filePath, byte[] content) throws IOException {
             Path cacheFile = getCacheFilePath(filePath);
             Files.createDirectories(cacheFile.getParent());
-            Files.write(cacheFile, content,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+            Files.write(
+                cacheFile,
+                content,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.WRITE,
+                StandardOpenOption.TRUNCATE_EXISTING
+            );
         }
 
         public boolean invalidate(String filePath) {
@@ -307,16 +371,26 @@ public class TieredCacheStrategy implements CacheStrategy {
             try {
                 Files.walk(cacheDirectory)
                     .filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(CACHE_FILE_EXTENSION))
+                    .filter(path ->
+                        path.toString().endsWith(CACHE_FILE_EXTENSION)
+                    )
                     .forEach(path -> {
                         try {
                             Files.delete(path);
                         } catch (IOException e) {
-                            LOGGER.warn("Failed to delete cache file: {}", path, e);
+                            LOGGER.warn(
+                                "Failed to delete cache file: {}",
+                                path,
+                                e
+                            );
                         }
                     });
             } catch (IOException e) {
-                LOGGER.warn("Failed to clear disk cache directory: {}", cacheDirectory, e);
+                LOGGER.warn(
+                    "Failed to clear disk cache directory: {}",
+                    cacheDirectory,
+                    e
+                );
             }
         }
 
@@ -328,7 +402,9 @@ public class TieredCacheStrategy implements CacheStrategy {
             try {
                 return Files.walk(cacheDirectory)
                     .filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(CACHE_FILE_EXTENSION))
+                    .filter(path ->
+                        path.toString().endsWith(CACHE_FILE_EXTENSION)
+                    )
                     .mapToLong(path -> {
                         try {
                             return Files.size(path);
@@ -345,12 +421,18 @@ public class TieredCacheStrategy implements CacheStrategy {
 
         public void performMaintenance() {
             // TODO: Implement LRU cleanup based on file access times if cache exceeds maxCacheSize
-            LOGGER.debug("L2 cache maintenance - current size: {} bytes", estimatedSize());
+            LOGGER.debug(
+                "L2 cache maintenance - current size: {} bytes",
+                estimatedSize()
+            );
         }
 
         private Path getCacheFilePath(String filePath) {
             // Convert file path to safe cache file name
-            String safeName = filePath.replace("/", "_").replace("\\", "_").replace(":", "_");
+            String safeName = filePath
+                .replace("/", "_")
+                .replace("\\", "_")
+                .replace(":", "_");
             return cacheDirectory.resolve(safeName + CACHE_FILE_EXTENSION);
         }
     }
