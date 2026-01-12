@@ -112,9 +112,10 @@ class F1r3DriveCli implements Callable<Integer> {
 
     @Option(
         names = { "--demo-folder-path" },
-        description = "Path for demo folder creation. Defaults to /Users/jedoan/demo-f1r3drive."
+        description = "Path for demo folder creation. Defaults to ~/demo-f1r3drive."
     )
-    private String demoFolderPath = "/Users/jedoan/demo-f1r3drive";
+    private String demoFolderPath =
+        System.getProperty("user.home") + "/demo-f1r3drive";
 
     private F1r3DriveFuse f1r3DriveFuse;
     private BlockchainFolderIntegration folderIntegration;

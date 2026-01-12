@@ -10,7 +10,12 @@ import io.f1r3fly.f1r3drive.filesystem.bridge.FSFillDir;
 import io.f1r3fly.f1r3drive.filesystem.common.Directory;
 import io.f1r3fly.f1r3drive.filesystem.common.Path;
 import io.f1r3fly.f1r3drive.filesystem.deployable.UnlockedWalletDirectory;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +55,29 @@ public class TokenDirectory extends AbstractLocalPath implements Directory {
         10L, // 10
         1L // 1
     );
+
+    // Operation costs in whole REV tokens
+    private static final Map<String, Long> OPERATION_COSTS;
+
+    static {
+        Map<String, Long> costs = new HashMap<>();
+        costs.put("CREATE_FILE", 1L);
+        costs.put("READ_FILE", 1L);
+        costs.put("WRITE_FILE", 3L);
+        costs.put("DELETE_FILE", 2L);
+        costs.put("CREATE_DIRECTORY", 5L);
+        costs.put("READ_DIRECTORY", 1L);
+        costs.put("DEPLOY_CONTRACT", 100L);
+        costs.put("QUERY_BALANCE", 1L);
+        costs.put("CHANGE_TOKEN", 2L);
+        costs.put("CREATE_TOKEN_FILE", 1L);
+        costs.put("UNLOCK_WALLET", 5L);
+        OPERATION_COSTS = Collections.unmodifiableMap(costs);
+    }
+
+    // Per-wallet operation costs tracking
+    private static final Map<String, Long> walletOperationCosts =
+        new ConcurrentHashMap<>();
 
     public TokenDirectory(
         BlockchainContext blockchainContext,
@@ -98,13 +126,18 @@ public class TokenDirectory extends AbstractLocalPath implements Directory {
         children.removeIf(c -> c instanceof TokenFile);
         refreshLastUpdated(); // Update timestamp when recreating children
 
-        long balance;
+        long rawBalance;
         try {
             LOGGER.debug("Checking balance for wallet...");
-            balance = checkBalance();
+            String walletAddress = getBlockchainContext()
+                .getWalletInfo()
+                .revAddress();
+            // Record cost for balance query
+            recordOperationCost(walletAddress, "QUERY_BALANCE");
+            rawBalance = checkBalance();
             LOGGER.info(
-                "Retrieved balance: {} for wallet: {}",
-                balance,
+                "Retrieved raw balance: {} for wallet: {}",
+                rawBalance,
                 getBlockchainContext().getWalletInfo().revAddress()
             );
         } catch (F1r3DriveError e) {
@@ -116,14 +149,33 @@ public class TokenDirectory extends AbstractLocalPath implements Directory {
             return;
         }
 
+        // Calculate adjusted balance by subtracting operation costs
+        String walletAddress = getBlockchainContext()
+            .getWalletInfo()
+            .revAddress();
+        long operationCosts = getTotalOperationCosts(walletAddress);
+        long balance = Math.max(0, rawBalance - operationCosts);
+
+        LOGGER.info(
+            "Adjusted balance calculation for wallet {}: raw={}, costs={}, available={}",
+            walletAddress,
+            rawBalance,
+            operationCosts,
+            balance
+        );
+
         if (balance == 0) {
-            LOGGER.warn("Wallet has zero balance, no tokens will be created");
+            LOGGER.warn(
+                "Wallet has zero available balance (raw: {}, costs: {}), no tokens will be created",
+                rawBalance,
+                operationCosts
+            );
             return;
         }
 
         Map<Long, Integer> tokenMap = splitBalance(balance);
         LOGGER.info(
-            "Split balance {} into {} denominations: {}",
+            "Split available balance {} into {} denominations: {}",
             balance,
             tokenMap.size(),
             tokenMap
@@ -301,19 +353,24 @@ public class TokenDirectory extends AbstractLocalPath implements Directory {
 
     @Override
     public void read(FSFillDir filler) {
-        LOGGER.debug(
-            "Reading TokenDirectory, balanceChanged: {}, children count: {}",
-            balanceChanged,
-            children.size()
+        LOGGER.info(
+            "Opening .tokens directory - checking current balance and regenerating tokens..."
         );
-        if (balanceChanged) {
-            LOGGER.info("Balance changed, recreating token files...");
+
+        // Always check balance and recreate tokens when folder is accessed
+        try {
             recreateTokenFiles();
-            balanceChanged = false;
+            // Also sync with physical filesystem
+            syncTokensToPhysicalFileSystem();
+            LOGGER.info(
+                "Token files updated based on current blockchain balance"
+            );
+        } catch (Exception e) {
+            LOGGER.error("Failed to update token files: {}", e.getMessage(), e);
         }
 
         // Log current children before filling directory
-        LOGGER.debug("TokenDirectory children before read:");
+        LOGGER.debug("TokenDirectory children after balance check:");
         children.forEach(child ->
             LOGGER.debug(
                 "  - {} (type: {})",
@@ -324,14 +381,216 @@ public class TokenDirectory extends AbstractLocalPath implements Directory {
 
         Directory.super.read(filler);
 
-        LOGGER.debug(
-            "TokenDirectory read completed with {} children",
+        LOGGER.info(
+            "TokenDirectory read completed with {} token files",
             children.size()
         );
+    }
+
+    /**
+     * Synchronizes virtual token files with physical filesystem
+     */
+    private void syncTokensToPhysicalFileSystem() {
+        try {
+            String walletAddress = getBlockchainContext()
+                .getWalletInfo()
+                .revAddress();
+            String baseDirectory =
+                System.getProperty("user.home") + "/demo-f1r3drive";
+
+            // Find physical wallet directory
+            File walletDir = new File(baseDirectory, walletAddress);
+            if (!walletDir.exists()) {
+                LOGGER.debug(
+                    "Physical wallet directory doesn't exist: {}",
+                    walletDir
+                );
+                return;
+            }
+
+            // Create .tokens directory in physical filesystem
+            File tokensDir = new File(walletDir, ".tokens");
+            if (!tokensDir.exists()) {
+                tokensDir.mkdirs();
+                LOGGER.debug(
+                    "Created physical .tokens directory: {}",
+                    tokensDir
+                );
+            }
+
+            // Remove old token files
+            File[] existingFiles = tokensDir.listFiles((dir, name) ->
+                name.endsWith(".token")
+            );
+            if (existingFiles != null) {
+                for (File file : existingFiles) {
+                    file.delete();
+                }
+                LOGGER.debug(
+                    "Removed {} old token files",
+                    existingFiles.length
+                );
+            }
+
+            // Create new token files based on virtual filesystem
+            int createdFiles = 0;
+            for (Path child : children) {
+                if (child instanceof TokenFile) {
+                    TokenFile tokenFile = (TokenFile) child;
+                    File physicalFile = new File(
+                        tokensDir,
+                        tokenFile.getName()
+                    );
+                    try {
+                        physicalFile.createNewFile();
+                        createdFiles++;
+                    } catch (IOException e) {
+                        LOGGER.warn(
+                            "Failed to create token file: {}",
+                            physicalFile,
+                            e
+                        );
+                    }
+                }
+            }
+
+            LOGGER.info(
+                "Synchronized {} token files to physical filesystem",
+                createdFiles
+            );
+        } catch (Exception e) {
+            LOGGER.warn(
+                "Failed to sync tokens to physical filesystem: {}",
+                e.getMessage()
+            );
+        }
     }
 
     @Override
     public @Nullable UnlockedWalletDirectory getParent() {
         return parent;
+    }
+
+    /**
+     * Records operation cost for a wallet
+     */
+    public static void recordOperationCost(
+        String walletAddress,
+        String operation
+    ) {
+        long cost = OPERATION_COSTS.getOrDefault(operation, 0L);
+        walletOperationCosts.put(
+            walletAddress,
+            walletOperationCosts.getOrDefault(walletAddress, 0L) + cost
+        );
+        LOGGER.debug(
+            "Recorded operation {} for wallet {} with cost {} REV (total: {} REV)",
+            operation,
+            walletAddress,
+            cost,
+            walletOperationCosts.get(walletAddress)
+        );
+    }
+
+    /**
+     * Gets total operation costs for a wallet in whole REV tokens
+     */
+    public static long getTotalOperationCosts(String walletAddress) {
+        return walletOperationCosts.getOrDefault(walletAddress, 0L);
+    }
+
+    /**
+     * Resets operation costs for a wallet
+     */
+    public static void resetWalletCosts(String walletAddress) {
+        walletOperationCosts.remove(walletAddress);
+        LOGGER.info("Reset operation costs for wallet: {}", walletAddress);
+    }
+
+    /**
+     * Gets operation costs report
+     */
+    public static String getOperationCostsReport() {
+        StringBuilder report = new StringBuilder();
+        report.append("=== F1r3Drive Operation Costs ===\n");
+        report.append("(All costs in whole REV tokens)\n\n");
+
+        report.append("FILE OPERATIONS:\n");
+        report.append(
+            String.format(
+                "  Create File:     %d REV\n",
+                OPERATION_COSTS.get("CREATE_FILE")
+            )
+        );
+        report.append(
+            String.format(
+                "  Read File:       %d REV\n",
+                OPERATION_COSTS.get("READ_FILE")
+            )
+        );
+        report.append(
+            String.format(
+                "  Write File:      %d REV\n",
+                OPERATION_COSTS.get("WRITE_FILE")
+            )
+        );
+        report.append(
+            String.format(
+                "  Delete File:     %d REV\n",
+                OPERATION_COSTS.get("DELETE_FILE")
+            )
+        );
+
+        report.append("\nDIRECTORY OPERATIONS:\n");
+        report.append(
+            String.format(
+                "  Create Directory: %d REV\n",
+                OPERATION_COSTS.get("CREATE_DIRECTORY")
+            )
+        );
+        report.append(
+            String.format(
+                "  Read Directory:   %d REV\n",
+                OPERATION_COSTS.get("READ_DIRECTORY")
+            )
+        );
+
+        report.append("\nBLOCKCHAIN OPERATIONS:\n");
+        report.append(
+            String.format(
+                "  Deploy Contract: %d REV\n",
+                OPERATION_COSTS.get("DEPLOY_CONTRACT")
+            )
+        );
+        report.append(
+            String.format(
+                "  Query Balance:    %d REV\n",
+                OPERATION_COSTS.get("QUERY_BALANCE")
+            )
+        );
+
+        report.append("\nTOKEN OPERATIONS:\n");
+        report.append(
+            String.format(
+                "  Change Token:     %d REV\n",
+                OPERATION_COSTS.get("CHANGE_TOKEN")
+            )
+        );
+        report.append(
+            String.format(
+                "  Create Token:     %d REV\n",
+                OPERATION_COSTS.get("CREATE_TOKEN_FILE")
+            )
+        );
+
+        report.append("\nWALLET OPERATIONS:\n");
+        report.append(
+            String.format(
+                "  Unlock Wallet:    %d REV\n",
+                OPERATION_COSTS.get("UNLOCK_WALLET")
+            )
+        );
+
+        return report.toString();
     }
 }

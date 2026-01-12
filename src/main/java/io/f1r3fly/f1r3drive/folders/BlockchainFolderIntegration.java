@@ -4,6 +4,11 @@ import io.f1r3fly.f1r3drive.background.state.StateChangeEventsManager;
 import io.f1r3fly.f1r3drive.blockchain.client.DeployDispatcher;
 import io.f1r3fly.f1r3drive.blockchain.client.F1r3flyBlockchainClient;
 import io.f1r3fly.f1r3drive.errors.F1r3DriveError;
+import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -14,7 +19,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Complete integration example showing how to discover existing blockchain tokens
- * and automatically create corresponding folders in /Users/jedoan/demo-f1r3drive
+ * and automatically create corresponding folders in ~/demo-f1r3drive
  */
 public class BlockchainFolderIntegration {
 
@@ -28,13 +33,17 @@ public class BlockchainFolderIntegration {
     private final TokenDiscovery tokenDiscovery;
     private final GenesisWalletExtractor genesisWalletExtractor;
     private final PhysicalWalletManager walletManager;
+    private final String baseDirectory;
     private DeployDispatcher deployDispatcher;
     private StateChangeEventsManager stateChangeEventsManager;
 
     public BlockchainFolderIntegration(
         F1r3flyBlockchainClient blockchainClient
     ) {
-        this(blockchainClient, "/Users/jedoan/demo-f1r3drive");
+        this(
+            blockchainClient,
+            System.getProperty("user.home") + "/demo-f1r3drive"
+        );
     }
 
     public BlockchainFolderIntegration(
@@ -42,6 +51,7 @@ public class BlockchainFolderIntegration {
         String baseDirectory
     ) {
         this.blockchainClient = blockchainClient;
+        this.baseDirectory = baseDirectory;
         this.folderTokenService = new FolderTokenService();
         this.autoFolderCreator = new AutoFolderCreator(
             blockchainClient,
@@ -57,10 +67,13 @@ public class BlockchainFolderIntegration {
         // Initialize DeployDispatcher and StateChangeEventsManager
         initializeBlockchainServices();
 
+        // Use the same base directory as FolderTokenManager to avoid duplication
+        String unifiedBaseDirectory =
+            System.getProperty("user.home") + "/demo-f1r3drive";
         this.walletManager = new PhysicalWalletManager(
             blockchainClient,
             deployDispatcher,
-            baseDirectory
+            unifiedBaseDirectory
         );
 
         LOGGER.info(
@@ -86,6 +99,9 @@ public class BlockchainFolderIntegration {
         LOGGER.info(
             "=== Starting Physical Wallet Discovery and Folder Creation ==="
         );
+
+        // Clean existing wallet folders first
+        cleanExistingWalletFolders();
         if (!excludeFromLocked.isEmpty()) {
             LOGGER.info(
                 "Excluding {} wallets from locked creation: {}",
@@ -838,6 +854,109 @@ public class BlockchainFolderIntegration {
                 failedOperations
             );
         }
+    }
+
+    /**
+     * Cleans existing wallet folders, keeping only .tokens directory and user files
+     */
+    private void cleanExistingWalletFolders() {
+        try {
+            Path baseDir = Paths.get(baseDirectory);
+
+            if (!Files.exists(baseDir)) {
+                LOGGER.debug("Base directory doesn't exist: {}", baseDir);
+                return;
+            }
+
+            LOGGER.info("Cleaning existing wallet folders...");
+
+            try (
+                DirectoryStream<Path> stream = Files.newDirectoryStream(baseDir)
+            ) {
+                for (Path entry : stream) {
+                    if (Files.isDirectory(entry)) {
+                        String folderName = entry.getFileName().toString();
+
+                        // Skip locked folders and process only main wallet folders
+                        if (
+                            !folderName.startsWith("locked_") &&
+                            folderName.startsWith("111") &&
+                            folderName.length() > 20
+                        ) {
+                            cleanWalletFolder(entry);
+                        }
+                    }
+                }
+            }
+
+            LOGGER.info("Wallet folder cleanup completed");
+        } catch (Exception e) {
+            LOGGER.warn(
+                "Failed to clean existing wallet folders: {}",
+                e.getMessage()
+            );
+        }
+    }
+
+    /**
+     * Cleans a specific wallet folder, keeping only .tokens and user files
+     */
+    private void cleanWalletFolder(Path walletFolder) {
+        try {
+            LOGGER.debug("Cleaning wallet folder: {}", walletFolder);
+
+            // System files/folders to remove
+            String[] systemItems = {
+                ".key_hash",
+                ".unlocked",
+                ".wallet_info",
+                "README.md",
+                "blockchain_files",
+                "folders",
+                "metadata",
+                ".DS_Store",
+            };
+
+            for (String systemItem : systemItems) {
+                Path itemPath = walletFolder.resolve(systemItem);
+                if (Files.exists(itemPath)) {
+                    if (Files.isDirectory(itemPath)) {
+                        deleteDirectoryRecursively(itemPath);
+                    } else {
+                        Files.delete(itemPath);
+                    }
+                    LOGGER.debug("Removed system item: {}", systemItem);
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warn(
+                "Failed to clean wallet folder {}: {}",
+                walletFolder,
+                e.getMessage()
+            );
+        }
+    }
+
+    /**
+     * Recursively deletes a directory and all its contents
+     */
+    private void deleteDirectoryRecursively(Path directory) throws IOException {
+        if (!Files.exists(directory)) {
+            return;
+        }
+
+        try (
+            DirectoryStream<Path> stream = Files.newDirectoryStream(directory)
+        ) {
+            for (Path entry : stream) {
+                if (Files.isDirectory(entry)) {
+                    deleteDirectoryRecursively(entry);
+                } else {
+                    Files.delete(entry);
+                }
+            }
+        }
+        Files.delete(directory);
     }
 
     /**

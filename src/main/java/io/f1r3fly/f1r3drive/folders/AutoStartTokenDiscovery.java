@@ -1,13 +1,12 @@
 package io.f1r3fly.f1r3drive.folders;
 
 import io.f1r3fly.f1r3drive.blockchain.client.F1r3flyBlockchainClient;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Simplified auto-start token discovery system for integration with existing F1r3Drive components
@@ -15,7 +14,9 @@ import java.util.concurrent.TimeUnit;
  */
 public class AutoStartTokenDiscovery {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(AutoStartTokenDiscovery.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+        AutoStartTokenDiscovery.class
+    );
 
     private final F1r3flyBlockchainClient blockchainClient;
     private final BlockchainFolderIntegration integration;
@@ -23,7 +24,8 @@ public class AutoStartTokenDiscovery {
     private volatile boolean isRunning = false;
 
     // Default configuration
-    private static final String DEFAULT_DEMO_PATH = "/Users/jedoan/demo-f1r3drive";
+    private static final String DEFAULT_DEMO_PATH =
+        System.getProperty("user.home") + "/demo-f1r3drive";
     private static final int DEFAULT_DISCOVERY_TIMEOUT_SECONDS = 30;
     private static final int DEFAULT_MONITORING_INTERVAL_MINUTES = 30;
 
@@ -32,7 +34,11 @@ public class AutoStartTokenDiscovery {
      * @param blockchainClient The blockchain client to use
      */
     public AutoStartTokenDiscovery(F1r3flyBlockchainClient blockchainClient) {
-        this(blockchainClient, DEFAULT_DEMO_PATH, DEFAULT_MONITORING_INTERVAL_MINUTES);
+        this(
+            blockchainClient,
+            DEFAULT_DEMO_PATH,
+            DEFAULT_MONITORING_INTERVAL_MINUTES
+        );
     }
 
     /**
@@ -41,9 +47,11 @@ public class AutoStartTokenDiscovery {
      * @param demoPath Path where demo folders should be created
      * @param monitoringIntervalMinutes Interval for continuous monitoring (0 to disable)
      */
-    public AutoStartTokenDiscovery(F1r3flyBlockchainClient blockchainClient,
-                                   String demoPath,
-                                   int monitoringIntervalMinutes) {
+    public AutoStartTokenDiscovery(
+        F1r3flyBlockchainClient blockchainClient,
+        String demoPath,
+        int monitoringIntervalMinutes
+    ) {
         this.blockchainClient = blockchainClient;
         this.executorService = Executors.newCachedThreadPool(r -> {
             Thread thread = new Thread(r, "TokenDiscovery-Worker");
@@ -53,23 +61,32 @@ public class AutoStartTokenDiscovery {
 
         LOGGER.info("Initializing AutoStartTokenDiscovery...");
         LOGGER.info("Demo path: {}", demoPath);
-        LOGGER.info("Monitoring interval: {} minutes", monitoringIntervalMinutes);
+        LOGGER.info(
+            "Monitoring interval: {} minutes",
+            monitoringIntervalMinutes
+        );
 
         try {
             // Create integration system
-            this.integration = new BlockchainFolderIntegration(blockchainClient);
+            this.integration = new BlockchainFolderIntegration(
+                blockchainClient
+            );
 
             // Start discovery automatically
             startDiscovery(monitoringIntervalMinutes);
 
             // Register shutdown hook
-            Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown, "TokenDiscovery-Shutdown"));
+            Runtime.getRuntime().addShutdownHook(
+                new Thread(this::shutdown, "TokenDiscovery-Shutdown")
+            );
 
             LOGGER.info("✓ AutoStartTokenDiscovery initialized successfully");
-
         } catch (Exception e) {
             LOGGER.error("Failed to initialize AutoStartTokenDiscovery", e);
-            throw new RuntimeException("Failed to initialize token discovery system", e);
+            throw new RuntimeException(
+                "Failed to initialize token discovery system",
+                e
+            );
         }
     }
 
@@ -86,20 +103,22 @@ public class AutoStartTokenDiscovery {
         LOGGER.info("Starting blockchain token discovery...");
 
         // Start initial discovery in background
-        CompletableFuture.runAsync(() -> {
-            try {
-                performInitialDiscovery();
+        CompletableFuture.runAsync(
+            () -> {
+                try {
+                    performInitialDiscovery();
 
-                // Start continuous monitoring if enabled
-                if (monitoringIntervalMinutes > 0) {
-                    startContinuousMonitoring(monitoringIntervalMinutes);
+                    // Start continuous monitoring if enabled
+                    if (monitoringIntervalMinutes > 0) {
+                        startContinuousMonitoring(monitoringIntervalMinutes);
+                    }
+                } catch (Exception e) {
+                    LOGGER.error("Error in discovery process", e);
+                    isRunning = false;
                 }
-
-            } catch (Exception e) {
-                LOGGER.error("Error in discovery process", e);
-                isRunning = false;
-            }
-        }, executorService);
+            },
+            executorService
+        );
     }
 
     /**
@@ -109,25 +128,31 @@ public class AutoStartTokenDiscovery {
         try {
             LOGGER.info("Performing initial blockchain token discovery...");
 
-            CompletableFuture<BlockchainFolderIntegration.IntegrationResult> discoveryFuture =
-                integration.discoverAndCreateAllFolders();
+            CompletableFuture<
+                BlockchainFolderIntegration.IntegrationResult
+            > discoveryFuture = integration.discoverAndCreateAllFolders();
 
             // Wait for completion with timeout
             BlockchainFolderIntegration.IntegrationResult result =
-                discoveryFuture.get(DEFAULT_DISCOVERY_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                discoveryFuture.get(
+                    DEFAULT_DISCOVERY_TIMEOUT_SECONDS,
+                    TimeUnit.SECONDS
+                );
 
             if (result.success) {
                 LOGGER.info("✓ Initial discovery completed successfully!");
                 logDiscoveryResults(result);
 
                 // Show integration statistics
-                BlockchainFolderIntegration.IntegrationStats stats = integration.getStats();
+                BlockchainFolderIntegration.IntegrationStats stats =
+                    integration.getStats();
                 LOGGER.info("Integration statistics: {}", stats);
-
             } else {
-                LOGGER.error("✗ Initial discovery failed: {}", result.errorMessage);
+                LOGGER.error(
+                    "✗ Initial discovery failed: {}",
+                    result.errorMessage
+                );
             }
-
         } catch (Exception e) {
             LOGGER.error("Error during initial discovery", e);
         }
@@ -137,12 +162,14 @@ public class AutoStartTokenDiscovery {
      * Starts continuous monitoring
      */
     private void startContinuousMonitoring(int intervalMinutes) {
-        LOGGER.info("Starting continuous token monitoring every {} minutes", intervalMinutes);
+        LOGGER.info(
+            "Starting continuous token monitoring every {} minutes",
+            intervalMinutes
+        );
 
         try {
             integration.startContinuousMonitoring(intervalMinutes);
             LOGGER.info("✓ Continuous monitoring started");
-
         } catch (Exception e) {
             LOGGER.error("Failed to start continuous monitoring", e);
         }
@@ -151,7 +178,9 @@ public class AutoStartTokenDiscovery {
     /**
      * Logs discovery results in a user-friendly format
      */
-    private void logDiscoveryResults(BlockchainFolderIntegration.IntegrationResult result) {
+    private void logDiscoveryResults(
+        BlockchainFolderIntegration.IntegrationResult result
+    ) {
         LOGGER.info("=== Discovery Results ===");
         LOGGER.info("Discovered wallets: {}", result.discoveredWallets);
         LOGGER.info("Discovered folders: {}", result.discoveredFolders);
@@ -183,15 +212,23 @@ public class AutoStartTokenDiscovery {
     /**
      * Triggers manual discovery
      */
-    public CompletableFuture<BlockchainFolderIntegration.IntegrationResult> triggerManualDiscovery() {
+    public CompletableFuture<
+        BlockchainFolderIntegration.IntegrationResult
+    > triggerManualDiscovery() {
         if (!isRunning) {
-            return CompletableFuture.completedFuture(createFailedResult("Discovery system is not running"));
+            return CompletableFuture.completedFuture(
+                createFailedResult("Discovery system is not running")
+            );
         }
 
         LOGGER.info("Triggering manual blockchain discovery...");
-        return integration.discoverAndCreateAllFolders()
+        return integration
+            .discoverAndCreateAllFolders()
             .thenApply(result -> {
-                LOGGER.info("Manual discovery completed: {}", result.success ? "SUCCESS" : "FAILED");
+                LOGGER.info(
+                    "Manual discovery completed: {}",
+                    result.success ? "SUCCESS" : "FAILED"
+                );
                 if (result.success) {
                     logDiscoveryResults(result);
                 }
@@ -202,8 +239,11 @@ public class AutoStartTokenDiscovery {
     /**
      * Creates a failed result
      */
-    private BlockchainFolderIntegration.IntegrationResult createFailedResult(String errorMessage) {
-        BlockchainFolderIntegration.IntegrationResult result = new BlockchainFolderIntegration.IntegrationResult();
+    private BlockchainFolderIntegration.IntegrationResult createFailedResult(
+        String errorMessage
+    ) {
+        BlockchainFolderIntegration.IntegrationResult result =
+            new BlockchainFolderIntegration.IntegrationResult();
         result.success = false;
         result.errorMessage = errorMessage;
         return result;
@@ -231,7 +271,6 @@ public class AutoStartTokenDiscovery {
             }
 
             LOGGER.info("✓ AutoStartTokenDiscovery shutdown complete");
-
         } catch (Exception e) {
             LOGGER.error("Error during shutdown", e);
             executorService.shutdownNow();
@@ -241,34 +280,50 @@ public class AutoStartTokenDiscovery {
     /**
      * Static factory method for easy integration
      */
-    public static AutoStartTokenDiscovery createAndStart(F1r3flyBlockchainClient blockchainClient) {
+    public static AutoStartTokenDiscovery createAndStart(
+        F1r3flyBlockchainClient blockchainClient
+    ) {
         return new AutoStartTokenDiscovery(blockchainClient);
     }
 
     /**
      * Static factory method with custom configuration
      */
-    public static AutoStartTokenDiscovery createAndStart(F1r3flyBlockchainClient blockchainClient,
-                                                        String demoPath,
-                                                        int monitoringIntervalMinutes) {
-        return new AutoStartTokenDiscovery(blockchainClient, demoPath, monitoringIntervalMinutes);
+    public static AutoStartTokenDiscovery createAndStart(
+        F1r3flyBlockchainClient blockchainClient,
+        String demoPath,
+        int monitoringIntervalMinutes
+    ) {
+        return new AutoStartTokenDiscovery(
+            blockchainClient,
+            demoPath,
+            monitoringIntervalMinutes
+        );
     }
 
     /**
      * Helper method to safely create discovery system
      */
-    public static AutoStartTokenDiscovery createSafely(F1r3flyBlockchainClient blockchainClient) {
+    public static AutoStartTokenDiscovery createSafely(
+        F1r3flyBlockchainClient blockchainClient
+    ) {
         try {
             return createAndStart(blockchainClient);
         } catch (Exception e) {
-            LOGGER.error("Failed to create AutoStartTokenDiscovery, will continue without token discovery", e);
+            LOGGER.error(
+                "Failed to create AutoStartTokenDiscovery, will continue without token discovery",
+                e
+            );
             return null; // Return null instead of failing the entire application
         }
     }
 
     @Override
     public String toString() {
-        return String.format("AutoStartTokenDiscovery{running=%s, stats=%s}",
-                           isRunning, getStats());
+        return String.format(
+            "AutoStartTokenDiscovery{running=%s, stats=%s}",
+            isRunning,
+            getStats()
+        );
     }
 }

@@ -10,7 +10,9 @@ import org.slf4j.LoggerFactory;
  */
 public class F1r3DriveStartupDemo {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(F1r3DriveStartupDemo.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+        F1r3DriveStartupDemo.class
+    );
 
     // Default blockchain configuration
     private static final String DEFAULT_VALIDATOR_HOST = "localhost";
@@ -20,7 +22,8 @@ public class F1r3DriveStartupDemo {
     private static final boolean DEFAULT_MANUAL_PROPOSE = true;
 
     // Demo folder path
-    private static final String DEMO_FOLDER_PATH = "/Users/jedoan/demo-f1r3drive";
+    private static final String DEMO_FOLDER_PATH =
+        System.getProperty("user.home") + "/demo-f1r3drive";
 
     public static void main(String[] args) {
         F1r3DriveStartupDemo demo = new F1r3DriveStartupDemo();
@@ -31,12 +34,17 @@ public class F1r3DriveStartupDemo {
      * Simulates F1r3Drive startup with automatic token discovery
      */
     public void runStartupDemo() {
-        LOGGER.info("=== F1r3Drive Startup Demo with Automatic Token Discovery ===");
+        LOGGER.info(
+            "=== F1r3Drive Startup Demo with Automatic Token Discovery ==="
+        );
         LOGGER.info("This demo shows what happens when F1r3Drive starts:");
         LOGGER.info("1. Blockchain client connects");
         LOGGER.info("2. Token discovery system automatically starts");
         LOGGER.info("3. Existing blockchain tokens are discovered");
-        LOGGER.info("4. Folders are automatically created in {}", DEMO_FOLDER_PATH);
+        LOGGER.info(
+            "4. Folders are automatically created in {}",
+            DEMO_FOLDER_PATH
+        );
         LOGGER.info("5. System continues running with periodic monitoring");
         LOGGER.info("");
 
@@ -49,12 +57,16 @@ public class F1r3DriveStartupDemo {
             // Step 2: Initialize automatic token discovery (like F1r3DriveFuse constructor does)
             LOGGER.info("");
             LOGGER.info("Step 2: Initializing automatic token discovery...");
-            AutoStartTokenDiscovery tokenDiscovery = AutoStartTokenDiscovery.createSafely(blockchainClient);
+            AutoStartTokenDiscovery tokenDiscovery =
+                AutoStartTokenDiscovery.createSafely(blockchainClient);
 
             if (tokenDiscovery != null) {
                 LOGGER.info("✓ Token discovery system started automatically");
                 LOGGER.info("✓ Background blockchain scanning initiated");
-                LOGGER.info("✓ Demo folders will be created in: {}", DEMO_FOLDER_PATH);
+                LOGGER.info(
+                    "✓ Demo folders will be created in: {}",
+                    DEMO_FOLDER_PATH
+                );
 
                 // Step 3: Wait for initial discovery to complete
                 LOGGER.info("");
@@ -64,31 +76,58 @@ public class F1r3DriveStartupDemo {
                 // Step 4: Show statistics
                 LOGGER.info("");
                 LOGGER.info("Step 4: Checking discovery results...");
-                BlockchainFolderIntegration.IntegrationStats stats = tokenDiscovery.getStats();
+                BlockchainFolderIntegration.IntegrationStats stats =
+                    tokenDiscovery.getStats();
                 if (stats != null) {
                     LOGGER.info("Current statistics: {}", stats);
-                    LOGGER.info("✓ Managed wallets: {}", stats.getManagedWallets());
-                    LOGGER.info("✓ Managed folders: {}", stats.getManagedFolders());
+                    LOGGER.info(
+                        "✓ Managed wallets: {}",
+                        stats.getManagedWallets()
+                    );
+                    LOGGER.info(
+                        "✓ Managed folders: {}",
+                        stats.getManagedFolders()
+                    );
                 } else {
                     LOGGER.info("Discovery still in progress...");
                 }
 
                 // Step 5: Trigger manual discovery to demonstrate functionality
                 LOGGER.info("");
-                LOGGER.info("Step 5: Triggering manual discovery for demonstration...");
-                tokenDiscovery.triggerManualDiscovery()
+                LOGGER.info(
+                    "Step 5: Triggering manual discovery for demonstration..."
+                );
+                tokenDiscovery
+                    .triggerManualDiscovery()
                     .thenAccept(result -> {
                         if (result.success) {
-                            LOGGER.info("✓ Manual discovery completed successfully!");
-                            LOGGER.info("  - Discovered {} wallets", result.discoveredWallets);
-                            LOGGER.info("  - Created {} wallet directories", result.createdWalletDirs);
-                            LOGGER.info("  - Created {} folder tokens", result.createdFolderTokens);
+                            LOGGER.info(
+                                "✓ Manual discovery completed successfully!"
+                            );
+                            LOGGER.info(
+                                "  - Discovered {} wallets",
+                                result.discoveredWallets
+                            );
+                            LOGGER.info(
+                                "  - Created {} wallet directories",
+                                result.createdWalletDirs
+                            );
+                            LOGGER.info(
+                                "  - Created {} folder tokens",
+                                result.createdFolderTokens
+                            );
                         } else {
-                            LOGGER.warn("Manual discovery encountered issues: {}", result.errorMessage);
+                            LOGGER.warn(
+                                "Manual discovery encountered issues: {}",
+                                result.errorMessage
+                            );
                         }
                     })
                     .exceptionally(throwable -> {
-                        LOGGER.error("Error during manual discovery", throwable);
+                        LOGGER.error(
+                            "Error during manual discovery",
+                            throwable
+                        );
                         return null;
                     });
 
@@ -99,12 +138,20 @@ public class F1r3DriveStartupDemo {
 
                 // Step 7: Simulate running system
                 LOGGER.info("");
-                LOGGER.info("Step 7: System now running with continuous monitoring...");
+                LOGGER.info(
+                    "Step 7: System now running with continuous monitoring..."
+                );
                 LOGGER.info("In a real F1r3Drive instance:");
                 LOGGER.info("  - Token discovery runs in background");
-                LOGGER.info("  - New blockchain tokens are automatically detected");
-                LOGGER.info("  - Corresponding folders are created automatically");
-                LOGGER.info("  - Folders are cleaned up when application shuts down");
+                LOGGER.info(
+                    "  - New blockchain tokens are automatically detected"
+                );
+                LOGGER.info(
+                    "  - Corresponding folders are created automatically"
+                );
+                LOGGER.info(
+                    "  - Folders are cleaned up when application shuts down"
+                );
 
                 // Wait a bit more for any async operations
                 Thread.sleep(3000);
@@ -115,12 +162,12 @@ public class F1r3DriveStartupDemo {
                 tokenDiscovery.shutdown();
                 LOGGER.info("✓ Token discovery system shutdown complete");
                 LOGGER.info("✓ Demo folders will be automatically cleaned up");
-
             } else {
                 LOGGER.error("✗ Failed to initialize token discovery system");
-                LOGGER.error("This could happen if blockchain is not accessible");
+                LOGGER.error(
+                    "This could happen if blockchain is not accessible"
+                );
             }
-
         } catch (Exception e) {
             LOGGER.error("Error during startup demo", e);
         }
@@ -128,7 +175,9 @@ public class F1r3DriveStartupDemo {
         LOGGER.info("");
         LOGGER.info("=== Demo Complete ===");
         LOGGER.info("This demonstrates the complete F1r3Drive startup process");
-        LOGGER.info("with automatic blockchain token discovery and folder creation.");
+        LOGGER.info(
+            "with automatic blockchain token discovery and folder creation."
+        );
     }
 
     /**
@@ -166,15 +215,23 @@ public class F1r3DriveStartupDemo {
         LOGGER.info("└── wallet_1111ocWg...fw3TDS8/");
         LOGGER.info("    └── storage/");
         LOGGER.info("");
-        LOGGER.info("Each wallet directory corresponds to a blockchain wallet address.");
-        LOGGER.info("Each subfolder corresponds to a folder token found in that wallet.");
-        LOGGER.info("All folders are created automatically without user intervention.");
+        LOGGER.info(
+            "Each wallet directory corresponds to a blockchain wallet address."
+        );
+        LOGGER.info(
+            "Each subfolder corresponds to a folder token found in that wallet."
+        );
+        LOGGER.info(
+            "All folders are created automatically without user intervention."
+        );
     }
 
     /**
      * Static method to demonstrate integration with existing F1r3Drive code
      */
-    public static void integrateWithF1r3Drive(F1r3flyBlockchainClient blockchainClient) {
+    public static void integrateWithF1r3Drive(
+        F1r3flyBlockchainClient blockchainClient
+    ) {
         LOGGER.info("=== Integration Example ===");
         LOGGER.info("To integrate with existing F1r3Drive code:");
         LOGGER.info("");
@@ -183,7 +240,9 @@ public class F1r3DriveStartupDemo {
         LOGGER.info("   - Add shutdown cleanup");
         LOGGER.info("");
         LOGGER.info("2. In F1r3DriveFuse.java constructor:");
-        LOGGER.info("   - Call: tokenDiscovery = AutoStartTokenDiscovery.createSafely(blockchainClient);");
+        LOGGER.info(
+            "   - Call: tokenDiscovery = AutoStartTokenDiscovery.createSafely(blockchainClient);"
+        );
         LOGGER.info("");
         LOGGER.info("3. In cleanup/shutdown methods:");
         LOGGER.info("   - Call: tokenDiscovery.shutdown();");
@@ -196,11 +255,16 @@ public class F1r3DriveStartupDemo {
 
         try {
             // Demonstrate the actual integration
-            AutoStartTokenDiscovery discovery = AutoStartTokenDiscovery.createSafely(blockchainClient);
+            AutoStartTokenDiscovery discovery =
+                AutoStartTokenDiscovery.createSafely(blockchainClient);
             if (discovery != null) {
-                LOGGER.info("✓ Integration successful - token discovery active");
+                LOGGER.info(
+                    "✓ Integration successful - token discovery active"
+                );
             } else {
-                LOGGER.warn("Integration failed - continuing without token discovery");
+                LOGGER.warn(
+                    "Integration failed - continuing without token discovery"
+                );
             }
         } catch (Exception e) {
             LOGGER.error("Integration error", e);
@@ -212,26 +276,36 @@ public class F1r3DriveStartupDemo {
      */
     public static void showCommandLineOptions() {
         LOGGER.info("=== Command Line Options ===");
-        LOGGER.info("F1r3Drive now supports the following token discovery options:");
+        LOGGER.info(
+            "F1r3Drive now supports the following token discovery options:"
+        );
         LOGGER.info("");
         LOGGER.info("--disable-token-discovery");
         LOGGER.info("  Completely disables automatic token discovery");
         LOGGER.info("");
         LOGGER.info("--token-discovery-interval <minutes>");
-        LOGGER.info("  Sets interval for periodic discovery (default: 30 minutes)");
+        LOGGER.info(
+            "  Sets interval for periodic discovery (default: 30 minutes)"
+        );
         LOGGER.info("  Set to 0 to disable periodic discovery");
         LOGGER.info("");
         LOGGER.info("--demo-folder-path <path>");
-        LOGGER.info("  Sets custom path for demo folders (default: /Users/jedoan/demo-f1r3drive)");
+        LOGGER.info(
+            "  Sets custom path for demo folders (default: ~/demo-f1r3drive)"
+        );
         LOGGER.info("");
         LOGGER.info("Examples:");
         LOGGER.info("  java F1r3DriveCli /mount/point --manual-propose true");
         LOGGER.info("    (token discovery enabled with defaults)");
         LOGGER.info("");
-        LOGGER.info("  java F1r3DriveCli /mount/point --manual-propose true --disable-token-discovery");
+        LOGGER.info(
+            "  java F1r3DriveCli /mount/point --manual-propose true --disable-token-discovery"
+        );
         LOGGER.info("    (token discovery disabled)");
         LOGGER.info("");
-        LOGGER.info("  java F1r3DriveCli /mount/point --manual-propose true --token-discovery-interval 60");
+        LOGGER.info(
+            "  java F1r3DriveCli /mount/point --manual-propose true --token-discovery-interval 60"
+        );
         LOGGER.info("    (token discovery every 60 minutes)");
     }
 }

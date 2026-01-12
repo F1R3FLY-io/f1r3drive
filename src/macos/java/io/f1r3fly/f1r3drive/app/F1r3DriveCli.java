@@ -22,8 +22,10 @@ import io.f1r3fly.f1r3drive.platform.F1r3DriveChangeListener;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
@@ -564,6 +566,9 @@ class F1r3DriveCli implements Callable<Integer> {
                 LOGGER.info("Disconnected from blockchain");
             }
 
+            // Clean up mount directory
+            cleanupMountDirectory();
+
             LOGGER.info("F1r3Drive system shutdown completed");
             // Shutdown folder integration and wallet management
             if (folderIntegration != null) {
@@ -584,6 +589,72 @@ class F1r3DriveCli implements Callable<Integer> {
         } finally {
             shutdownLatch.countDown();
         }
+    }
+
+    /**
+     * Cleans up the mount directory on shutdown
+     */
+    private void cleanupMountDirectory() {
+        try {
+            if (demoFolderPath != null && !demoFolderPath.trim().isEmpty()) {
+                Path mountDir = Paths.get(demoFolderPath);
+                if (Files.exists(mountDir)) {
+                    LOGGER.info("Cleaning up mount directory: {}", mountDir);
+                    deleteDirectoryContents(mountDir);
+                    LOGGER.info("Mount directory cleanup completed");
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warn(
+                "Failed to cleanup mount directory: {}",
+                e.getMessage()
+            );
+        }
+    }
+
+    /**
+     * Recursively deletes directory contents but keeps the directory itself
+     */
+    private void deleteDirectoryContents(Path directory) throws IOException {
+        if (!Files.exists(directory) || !Files.isDirectory(directory)) {
+            return;
+        }
+
+        try (
+            DirectoryStream<Path> stream = Files.newDirectoryStream(directory)
+        ) {
+            for (Path entry : stream) {
+                if (Files.isDirectory(entry)) {
+                    deleteDirectoryRecursively(entry);
+                } else {
+                    Files.delete(entry);
+                    LOGGER.debug("Deleted file: {}", entry);
+                }
+            }
+        }
+    }
+
+    /**
+     * Recursively deletes a directory and all its contents
+     */
+    private void deleteDirectoryRecursively(Path directory) throws IOException {
+        if (!Files.exists(directory)) {
+            return;
+        }
+
+        try (
+            DirectoryStream<Path> stream = Files.newDirectoryStream(directory)
+        ) {
+            for (Path entry : stream) {
+                if (Files.isDirectory(entry)) {
+                    deleteDirectoryRecursively(entry);
+                } else {
+                    Files.delete(entry);
+                }
+            }
+        }
+        Files.delete(directory);
+        LOGGER.debug("Deleted directory: {}", directory);
     }
 
     /**

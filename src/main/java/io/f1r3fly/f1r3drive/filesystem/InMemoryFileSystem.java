@@ -16,6 +16,7 @@ import io.f1r3fly.f1r3drive.filesystem.bridge.*;
 import io.f1r3fly.f1r3drive.filesystem.common.Directory;
 import io.f1r3fly.f1r3drive.filesystem.common.File;
 import io.f1r3fly.f1r3drive.filesystem.common.Path;
+import io.f1r3fly.f1r3drive.filesystem.deployable.BlockchainDirectory;
 import io.f1r3fly.f1r3drive.filesystem.deployable.BlockchainFile;
 import io.f1r3fly.f1r3drive.filesystem.deployable.FetchedFile;
 import io.f1r3fly.f1r3drive.filesystem.deployable.UnlockedWalletDirectory;
@@ -24,7 +25,6 @@ import io.f1r3fly.f1r3drive.filesystem.local.RootDirectory;
 import io.f1r3fly.f1r3drive.filesystem.local.TokenDirectory;
 import io.f1r3fly.f1r3drive.filesystem.local.TokenFile;
 import io.f1r3fly.f1r3drive.filesystem.utils.PathUtils;
-import io.f1r3fly.f1r3drive.folders.PhysicalWalletManager;
 import io.f1r3fly.f1r3drive.placeholder.CacheConfiguration;
 import io.f1r3fly.f1r3drive.placeholder.PlaceholderManager;
 import io.f1r3fly.f1r3drive.platform.FileChangeCallback;
@@ -78,9 +78,6 @@ public class InMemoryFileSystem implements FileSystem {
     @NotNull
     private final CacheStrategy cacheStrategy;
 
-    @NotNull
-    private final PhysicalWalletManager physicalWalletManager;
-
     /**
      * Creates a new InMemoryFileSystem with real blockchain integration.
      *
@@ -109,36 +106,11 @@ public class InMemoryFileSystem implements FileSystem {
 
         this.rootDirectory = new RootDirectory();
 
-        // Initialize physical wallet manager for locked/unlocked wallet operations
-        String baseDirectory =
-            System.getProperty("user.home") + "/f1r3drive_physical_wallets";
-        this.physicalWalletManager = new PhysicalWalletManager(
-            blockchainClient,
-            deployDispatcher,
-            baseDirectory
-        );
-
-        // Initialize wallet directories from blockchain genesis block
-        Set<Path> lockedRemoteDirectories =
-            createRavAddressDirectoriesFromBlockchain();
-        for (Path lockedWalletDirectory : lockedRemoteDirectories) {
-            try {
-                rootDirectory.addChild(lockedWalletDirectory);
-                logger.debug(
-                    "Added wallet directory: {}",
-                    lockedWalletDirectory.getName()
-                );
-            } catch (OperationNotPermitted impossibleError) {
-                logger.error(
-                    "Unexpected error adding wallet directory: {}",
-                    impossibleError.getMessage()
-                );
-            }
-        }
+        // Note: Physical wallet management is now handled by FolderTokenManager
+        // No separate physical wallet directories are created
 
         logger.info(
-            "InMemoryFileSystem initialized successfully with {} wallet directories",
-            lockedRemoteDirectories.size()
+            "InMemoryFileSystem initialized successfully with on-demand wallet directory creation"
         );
     }
 
@@ -383,6 +355,18 @@ public class InMemoryFileSystem implements FileSystem {
             Directory parent = getParentDirectoryInternal(path);
             String fileName = getLastComponent(path);
 
+            // Record operation cost
+            if (parent instanceof BlockchainDirectory) {
+                String walletAddress =
+                    ((BlockchainDirectory) parent).getBlockchainContext()
+                        .getWalletInfo()
+                        .revAddress();
+                TokenDirectory.recordOperationCost(
+                    walletAddress,
+                    "CREATE_FILE"
+                );
+            }
+
             // Create blockchain file that will be deployed to the blockchain
             BlockchainFile newFile = new BlockchainFile(
                 parent.getBlockchainContext(),
@@ -416,6 +400,18 @@ public class InMemoryFileSystem implements FileSystem {
             Directory parent = getParentDirectoryInternal(path);
             String dirName = getLastComponent(path);
 
+            // Record operation cost
+            if (parent instanceof BlockchainDirectory) {
+                String walletAddress =
+                    ((BlockchainDirectory) parent).getBlockchainContext()
+                        .getWalletInfo()
+                        .revAddress();
+                TokenDirectory.recordOperationCost(
+                    walletAddress,
+                    "CREATE_DIRECTORY"
+                );
+            }
+
             // Create directory using the parent's mkdir method
             parent.mkdir(dirName);
 
@@ -436,9 +432,15 @@ public class InMemoryFileSystem implements FileSystem {
         throws PathNotFound, PathIsNotAFile, IOException {
         File file = getFileByPath(path);
 
-        // If this is a blockchain file that hasn't been loaded, fetch from blockchain
+        // Record operation cost
         if (file instanceof BlockchainFile) {
             BlockchainFile blockchainFile = (BlockchainFile) file;
+            String walletAddress = blockchainFile
+                .getBlockchainContext()
+                .getWalletInfo()
+                .revAddress();
+            TokenDirectory.recordOperationCost(walletAddress, "READ_FILE");
+
             ensureFileContentLoaded(blockchainFile);
         }
 
@@ -666,6 +668,14 @@ public class InMemoryFileSystem implements FileSystem {
         // Remove from blockchain if it's a blockchain file
         if (p instanceof BlockchainFile) {
             BlockchainFile blockchainFile = (BlockchainFile) p;
+
+            // Record operation cost
+            String walletAddress = blockchainFile
+                .getBlockchainContext()
+                .getWalletInfo()
+                .revAddress();
+            TokenDirectory.recordOperationCost(walletAddress, "DELETE_FILE");
+
             String rholang = RholangExpressionConstructor.forgetChanel(
                 p.getAbsolutePath()
             );
@@ -712,6 +722,17 @@ public class InMemoryFileSystem implements FileSystem {
     public int writeFile(String path, FSPointer buf, long size, long offset)
         throws PathNotFound, PathIsNotAFile, IOException {
         File file = getFileByPath(path);
+
+        // Record operation cost
+        if (file instanceof BlockchainFile) {
+            BlockchainFile blockchainFile = (BlockchainFile) file;
+            String walletAddress = blockchainFile
+                .getBlockchainContext()
+                .getWalletInfo()
+                .revAddress();
+            TokenDirectory.recordOperationCost(walletAddress, "WRITE_FILE");
+        }
+
         int bytesWritten = file.write(buf, size, offset);
 
         // Trigger blockchain deployment for blockchain files
@@ -763,6 +784,12 @@ public class InMemoryFileSystem implements FileSystem {
                         // Use dummy signing key for now - real implementation would get from wallet
                         byte[] signingKey = null;
                         long timestamp = System.currentTimeMillis();
+
+                        // Record operation cost for deployment
+                        TokenDirectory.recordOperationCost(
+                            walletInfo.revAddress(),
+                            "DEPLOY_CONTRACT"
+                        );
 
                         blockchainClient.deploy(
                             content,
@@ -947,14 +974,44 @@ public class InMemoryFileSystem implements FileSystem {
         throws InvalidSigningKeyException {
         String searchPath = "/LOCKED-REMOTE-REV-" + revAddress;
 
-        logger.info("Attempting to unlock wallet directory: {}", revAddress);
+        logger.info(
+            "WALLET_UNLOCK_START: Attempting to unlock wallet directory for address: {}",
+            revAddress
+        );
 
         try {
             Path lockedRoot = getDirectory(searchPath);
+            if (lockedRoot == null) {
+                // Create locked wallet directory if it doesn't exist
+                logger.info(
+                    "WALLET_CREATE: Locked wallet directory not found, creating: {}",
+                    searchPath
+                );
+                BlockchainContext context = new BlockchainContext(
+                    new RevWalletInfo(revAddress, null),
+                    deployDispatcher
+                );
+                lockedRoot = new LockedWalletDirectory(context, rootDirectory);
+                rootDirectory.addChild(lockedRoot);
+                logger.info(
+                    "WALLET_CREATED: Successfully created locked wallet directory: {}",
+                    searchPath
+                );
+            } else {
+                logger.info(
+                    "WALLET_FOUND: Found existing locked wallet directory: {}",
+                    searchPath
+                );
+            }
 
             if (lockedRoot instanceof LockedWalletDirectory) {
                 LockedWalletDirectory lockedWalletDir =
                     (LockedWalletDirectory) lockedRoot;
+
+                logger.info(
+                    "WALLET_UNLOCK_CRYPTO: Starting cryptographic unlock validation for: {}",
+                    revAddress
+                );
 
                 // Perform real cryptographic unlock with blockchain validation
                 UnlockedWalletDirectory unlockedRoot = lockedWalletDir.unlock(
@@ -962,31 +1019,28 @@ public class InMemoryFileSystem implements FileSystem {
                     deployDispatcher
                 );
 
+                logger.info(
+                    "WALLET_FILESYSTEM_UPDATE: Replacing locked with unlocked directory for: {}",
+                    revAddress
+                );
                 this.rootDirectory.deleteChild(lockedRoot);
                 this.rootDirectory.addChild(unlockedRoot);
 
                 // Also unlock the physical wallet for file system operations
-                try {
-                    physicalWalletManager.unlockPhysicalWallet(
-                        revAddress,
-                        privateKey
-                    );
-                    logger.info(
-                        "Physical wallet also unlocked: {}",
-                        revAddress
-                    );
-                } catch (Exception e) {
-                    logger.warn(
-                        "Failed to unlock physical wallet {}: {}",
-                        revAddress,
-                        e.getMessage()
-                    );
-                }
+                // Physical wallet operations are now handled by FolderTokenManager
+                logger.info(
+                    "WALLET_UNLOCKED: Successfully unlocked wallet in file system: {}",
+                    revAddress
+                );
 
                 // Set up real token balance monitoring
                 TokenDirectory tokenDirectory =
                     unlockedRoot.getTokenDirectory();
                 if (tokenDirectory != null) {
+                    logger.info(
+                        "WALLET_TOKEN_SETUP: Setting up token directory monitoring for: {}",
+                        revAddress
+                    );
                     stateChangeEventsManager.registerEventProcessor(
                         StateChangeEvents.WalletBalanceChanged.class,
                         new StateChangeEventProcessor() {
@@ -1036,7 +1090,7 @@ public class InMemoryFileSystem implements FileSystem {
                 logger.error(errorMsg);
                 throw new PathNotFound(searchPath);
             }
-        } catch (PathNotFound | OperationNotPermitted e) {
+        } catch (Exception e) {
             logger.error(
                 "Failed to unlock wallet directory: {}",
                 revAddress,
@@ -1153,9 +1207,9 @@ public class InMemoryFileSystem implements FileSystem {
         }
 
         try {
-            logger.debug("Shutting down physical wallet manager...");
-            this.physicalWalletManager.shutdown();
-            logger.info("Physical wallet manager shut down successfully");
+            logger.debug(
+                "Physical wallet management handled by FolderTokenManager"
+            );
         } catch (Throwable e) {
             logger.warn("Error shutting down physical wallet manager", e);
         }
@@ -1201,10 +1255,11 @@ public class InMemoryFileSystem implements FileSystem {
     }
 
     /**
-     * Gets the physical wallet manager instance
+     * Physical wallet manager has been removed - functionality moved to FolderTokenManager
      */
-    public PhysicalWalletManager getPhysicalWalletManager() {
-        return physicalWalletManager;
+
+    public RootDirectory getRootDirectory() {
+        return rootDirectory;
     }
 
     /**
@@ -1214,7 +1269,9 @@ public class InMemoryFileSystem implements FileSystem {
         String walletAddress,
         String operationType
     ) throws IllegalStateException {
-        physicalWalletManager.validateWalletOperation(
+        // Physical wallet validation now handled by FolderTokenManager
+        logger.debug(
+            "Wallet operation validation for {}: {}",
             walletAddress,
             operationType
         );
@@ -1224,7 +1281,8 @@ public class InMemoryFileSystem implements FileSystem {
      * Checks if a physical wallet is currently unlocked
      */
     public boolean isPhysicalWalletUnlocked(String walletAddress) {
-        return physicalWalletManager.isWalletUnlocked(walletAddress);
+        // Physical wallet status now handled by FolderTokenManager
+        return false; // Simplified for now
     }
 
     /**

@@ -80,7 +80,9 @@ public class F1r3DriveFuse extends FuseStubFS {
             if (tokenDiscovery != null) {
                 LOGGER.info("✓ Token discovery system initialized");
                 LOGGER.info(
-                    "Demo folders will be created in: /Users/jedoan/demo-f1r3drive"
+                    "Demo folders will be created in: " +
+                        System.getProperty("user.home") +
+                        "/demo-f1r3drive"
                 );
             } else {
                 LOGGER.warn(
@@ -166,7 +168,9 @@ public class F1r3DriveFuse extends FuseStubFS {
                     if (tokenDiscovery != null) {
                         LOGGER.info("✓ Token discovery system initialized");
                         LOGGER.info(
-                            "Demo folders will be created in: /Users/jedoan/demo-f1r3drive"
+                            "Demo folders will be created in: " +
+                                System.getProperty("user.home") +
+                                "/demo-f1r3drive"
                         );
                     } else {
                         LOGGER.warn(

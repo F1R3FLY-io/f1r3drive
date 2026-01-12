@@ -2,12 +2,10 @@ package io.f1r3fly.f1r3drive.folders;
 
 import casper.DeployServiceCommon;
 import io.f1r3fly.f1r3drive.blockchain.client.F1r3flyBlockchainClient;
+import io.f1r3fly.f1r3drive.blockchain.rholang.RholangExpressionConstructor;
 import io.f1r3fly.f1r3drive.errors.F1r3DriveError;
 import io.f1r3fly.f1r3drive.filesystem.deployable.UnlockedWalletDirectory;
 import io.f1r3fly.f1r3drive.filesystem.local.LockedWalletDirectory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,6 +14,9 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import rhoapi.RhoTypes;
 
 /**
  * Service to extract wallets from genesis block and create corresponding physical folders.
@@ -23,15 +24,45 @@ import java.util.regex.Pattern;
  */
 public class GenesisWalletExtractor {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(GenesisWalletExtractor.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+        GenesisWalletExtractor.class
+    );
 
     private final F1r3flyBlockchainClient blockchainClient;
     private final String baseDirectory;
 
     // Pattern to match REV addresses in genesis block
-    private static final Pattern REV_ADDRESS_PATTERN = Pattern.compile("\\\"(1111[A-Za-z0-9]+)\\\"");
+    private static final Pattern REV_ADDRESS_PATTERN = Pattern.compile(
+        "\\\"(1111[A-Za-z0-9]+)\\\""
+    );
 
-    public GenesisWalletExtractor(F1r3flyBlockchainClient blockchainClient, String baseDirectory) {
+    // Token denominations (same as TokenDirectory)
+    private static final List<Long> DENOMINATIONS = Arrays.asList(
+        1_000_000_000_000_000_000L, // 1 quintillion
+        100_000_000_000_000_000L, // 100 quadrillion
+        10_000_000_000_000_000L, // 10 quadrillion
+        1_000_000_000_000_000L, // 1 quadrillion
+        100_000_000_000_000L, // 100 trillion
+        10_000_000_000_000L, // 10 trillion
+        1_000_000_000_000L, // 1 trillion
+        100_000_000_000L, // 100 billion
+        10_000_000_000L, // 10 billion
+        1_000_000_000L, // 1 billion
+        100_000_000L, // 100 million
+        10_000_000L, // 10 million
+        1_000_000L, // 1 million
+        100_000L, // 100K
+        10_000L, // 10K
+        1_000L, // 1K
+        100L, // 100
+        10L, // 10
+        1L // 1
+    );
+
+    public GenesisWalletExtractor(
+        F1r3flyBlockchainClient blockchainClient,
+        String baseDirectory
+    ) {
         this.blockchainClient = blockchainClient;
         this.baseDirectory = baseDirectory;
     }
@@ -42,16 +73,29 @@ public class GenesisWalletExtractor {
     public CompletableFuture<List<String>> extractWalletAddressesFromGenesis() {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                LOGGER.info("Extracting wallet addresses from genesis block...");
+                LOGGER.info(
+                    "Extracting wallet addresses from genesis block..."
+                );
 
-                List<DeployServiceCommon.DeployInfo> deploys = blockchainClient.getGenesisBlock().getDeploysList();
+                List<DeployServiceCommon.DeployInfo> deploys = blockchainClient
+                    .getGenesisBlock()
+                    .getDeploysList();
 
-                DeployServiceCommon.DeployInfo tokenInitializeDeploy = deploys.stream()
-                        .filter(deployInfo -> deployInfo.getTerm().contains("revVaultInitCh"))
-                        .findFirst()
-                        .orElseThrow(() -> new RuntimeException("No revVaultInitCh deploy found in genesis block"));
+                DeployServiceCommon.DeployInfo tokenInitializeDeploy = deploys
+                    .stream()
+                    .filter(deployInfo ->
+                        deployInfo.getTerm().contains("revVaultInitCh")
+                    )
+                    .findFirst()
+                    .orElseThrow(() ->
+                        new RuntimeException(
+                            "No revVaultInitCh deploy found in genesis block"
+                        )
+                    );
 
-                Matcher matcher = REV_ADDRESS_PATTERN.matcher(tokenInitializeDeploy.getTerm());
+                Matcher matcher = REV_ADDRESS_PATTERN.matcher(
+                    tokenInitializeDeploy.getTerm()
+                );
 
                 List<String> ravAddresses = new ArrayList<>();
                 while (matcher.find()) {
@@ -60,11 +104,16 @@ public class GenesisWalletExtractor {
                     LOGGER.debug("Found REV address in genesis: {}", address);
                 }
 
-                LOGGER.info("Extracted {} wallet addresses from genesis block", ravAddresses.size());
+                LOGGER.info(
+                    "Extracted {} wallet addresses from genesis block",
+                    ravAddresses.size()
+                );
                 return ravAddresses;
-
             } catch (Exception e) {
-                LOGGER.error("Failed to extract wallet addresses from genesis block, falling back to test data", e);
+                LOGGER.error(
+                    "Failed to extract wallet addresses from genesis block, falling back to test data",
+                    e
+                );
                 return getTestWalletAddresses();
             }
         });
@@ -73,7 +122,9 @@ public class GenesisWalletExtractor {
     /**
      * Creates physical folders for discovered wallet addresses
      */
-    public CompletableFuture<WalletExtractionResult> createPhysicalFoldersForWallets(List<String> walletAddresses) {
+    public CompletableFuture<
+        WalletExtractionResult
+    > createPhysicalFoldersForWallets(List<String> walletAddresses) {
         return CompletableFuture.supplyAsync(() -> {
             WalletExtractionResult result = new WalletExtractionResult();
 
@@ -87,22 +138,30 @@ public class GenesisWalletExtractor {
 
                 for (String walletAddress : walletAddresses) {
                     try {
-                        Path walletFolder = createWalletFolder(walletAddress);
-                        result.addSuccessfulWallet(walletAddress, walletFolder.toString());
-
-                        // Create wallet content (tokens, files, etc.)
-                        createWalletContent(walletAddress, walletFolder);
-
+                        Path tokensPath = createTokensDirectoryInMainWallet(
+                            walletAddress
+                        );
+                        if (tokensPath != null) {
+                            result.addSuccessfulWallet(
+                                walletAddress,
+                                tokensPath.toString()
+                            );
+                        }
                     } catch (Exception e) {
-                        LOGGER.error("Failed to create folder for wallet: {}", walletAddress, e);
+                        LOGGER.error(
+                            "Failed to create folder for wallet: {}",
+                            walletAddress,
+                            e
+                        );
                         result.addFailedWallet(walletAddress, e.getMessage());
                     }
                 }
 
-                LOGGER.info("Wallet folder creation completed: {} successful, {} failed",
+                LOGGER.info(
+                    "Wallet folder creation completed: {} successful, {} failed",
                     result.getSuccessfulWallets().size(),
-                    result.getFailedWallets().size());
-
+                    result.getFailedWallets().size()
+                );
             } catch (Exception e) {
                 LOGGER.error("Error during wallet folder creation", e);
                 result.setGlobalError(e.getMessage());
@@ -113,32 +172,159 @@ public class GenesisWalletExtractor {
     }
 
     /**
-     * Creates physical folder for a single wallet address
+     * Creates .tokens directory in the main wallet folder
      */
-    private Path createWalletFolder(String walletAddress) throws IOException {
-        String folderName = createWalletFolderName(walletAddress);
-        Path walletPath = Paths.get(baseDirectory, folderName);
+    private Path createTokensDirectoryInMainWallet(String walletAddress)
+        throws IOException {
+        // Find the main wallet directory (full wallet address name)
+        Path mainWalletPath = Paths.get(baseDirectory, walletAddress);
 
-        if (!Files.exists(walletPath)) {
-            Files.createDirectories(walletPath);
-            LOGGER.debug("Created wallet folder: {}", walletPath);
-        } else {
-            LOGGER.debug("Wallet folder already exists: {}", walletPath);
+        // Check if main wallet directory exists
+        if (!Files.exists(mainWalletPath)) {
+            LOGGER.debug(
+                "Main wallet directory doesn't exist yet: {}",
+                mainWalletPath
+            );
+            return null;
         }
 
-        return walletPath;
+        // Create .tokens directory inside the main wallet folder
+        Path tokensPath = mainWalletPath.resolve(".tokens");
+
+        if (!Files.exists(tokensPath)) {
+            Files.createDirectories(tokensPath);
+
+            // Create physical token files based on wallet balance
+            try {
+                createTokenFilesForWallet(walletAddress, tokensPath);
+                LOGGER.debug(
+                    "Created .tokens directory with token files: {}",
+                    tokensPath
+                );
+            } catch (Exception e) {
+                LOGGER.warn(
+                    "Failed to create token files for wallet {}: {}",
+                    walletAddress,
+                    e.getMessage()
+                );
+                LOGGER.debug("Created empty .tokens directory: {}", tokensPath);
+            }
+        } else {
+            LOGGER.debug(".tokens directory already exists: {}", tokensPath);
+        }
+
+        return tokensPath;
     }
 
     /**
-     * Creates readable folder name from wallet address
+     * Creates physical token files based on wallet balance from blockchain
      */
-    private String createWalletFolderName(String walletAddress) {
-        if (walletAddress.length() > 16) {
-            return String.format("wallet_%s...%s",
-                walletAddress.substring(0, 8),
-                walletAddress.substring(walletAddress.length() - 8));
+    private void createTokenFilesForWallet(
+        String walletAddress,
+        Path tokensPath
+    ) throws Exception {
+        long balance = 0;
+        Map<Long, Integer> tokenMap;
+
+        try {
+            // Query wallet balance from blockchain
+            balance = getWalletBalance(walletAddress);
+            tokenMap = splitBalance(balance);
+
+            LOGGER.info(
+                "Creating token files for wallet {} with balance {}: {}",
+                walletAddress,
+                balance,
+                tokenMap
+            );
+        } catch (Exception e) {
+            LOGGER.warn(
+                "Failed to get balance from blockchain for wallet {}, creating demo tokens: {}",
+                walletAddress,
+                e.getMessage()
+            );
+
+            // Fallback: create demo tokens when blockchain is unavailable
+            tokenMap = createDemoTokenMap();
+            LOGGER.info(
+                "Creating demo token files for wallet {}: {}",
+                walletAddress,
+                tokenMap
+            );
         }
-        return "wallet_" + walletAddress;
+
+        if (tokenMap.isEmpty()) {
+            LOGGER.info("No tokens to create for wallet {}", walletAddress);
+            return;
+        }
+
+        // Create physical token files
+        for (Map.Entry<Long, Integer> entry : tokenMap.entrySet()) {
+            long denomination = entry.getKey();
+            int count = entry.getValue();
+
+            for (int i = 0; i < count; i++) {
+                String tokenFileName = denomination + "-REV." + i + ".token";
+                Path tokenFilePath = tokensPath.resolve(tokenFileName);
+
+                // Create empty token file
+                Files.createFile(tokenFilePath);
+                LOGGER.debug("Created token file: {}", tokenFileName);
+            }
+        }
+
+        LOGGER.info(
+            "Created {} token files for wallet {}",
+            tokenMap.values().stream().mapToInt(Integer::intValue).sum(),
+            walletAddress
+        );
+    }
+
+    /**
+     * Gets wallet balance from blockchain
+     */
+    private long getWalletBalance(String walletAddress) throws F1r3DriveError {
+        String checkBalanceRho = RholangExpressionConstructor.checkBalanceRho(
+            walletAddress
+        );
+        RhoTypes.Expr expr = blockchainClient.exploratoryDeploy(
+            checkBalanceRho
+        );
+
+        if (!expr.hasGInt()) {
+            throw new F1r3DriveError(
+                "Invalid balance data for wallet: " + walletAddress
+            );
+        }
+
+        return expr.getGInt();
+    }
+
+    /**
+     * Splits balance into denominations (same logic as TokenDirectory)
+     */
+    private Map<Long, Integer> splitBalance(long balance) {
+        Map<Long, Integer> tokenMap = new HashMap<>();
+
+        for (long denomination : DENOMINATIONS) {
+            int count = (int) (balance / denomination);
+            if (count > 0) {
+                tokenMap.put(denomination, count);
+                balance %= denomination;
+            }
+        }
+
+        return tokenMap;
+    }
+
+    /**
+     * Creates demo token map for testing when blockchain is unavailable
+     */
+    private Map<Long, Integer> createDemoTokenMap() {
+        Map<Long, Integer> tokenMap = new HashMap<>();
+        // Create 5 tokens of 10 quadrillion denomination
+        tokenMap.put(10_000_000_000_000_000L, 5);
+        return tokenMap;
     }
 
     /**
@@ -148,11 +334,13 @@ public class GenesisWalletExtractor {
         try {
             // Create basic wallet info file
             Path walletInfoFile = walletFolder.resolve("wallet_info.txt");
-            String walletInfo = String.format("Wallet Address: %s%n" +
+            String walletInfo = String.format(
+                "Wallet Address: %s%n" +
                     "Created: %s%n" +
                     "Status: Discovered from Genesis Block%n",
-                    walletAddress,
-                    new Date());
+                walletAddress,
+                new Date()
+            );
             Files.write(walletInfoFile, walletInfo.getBytes());
 
             // Create tokens directory
@@ -171,48 +359,71 @@ public class GenesisWalletExtractor {
             tryCreateActualWalletContent(walletAddress, walletFolder);
 
             LOGGER.debug("Created wallet content for: {}", walletAddress);
-
         } catch (Exception e) {
-            LOGGER.warn("Failed to create wallet content for {}: {}", walletAddress, e.getMessage());
+            LOGGER.warn(
+                "Failed to create wallet content for {}: {}",
+                walletAddress,
+                e.getMessage()
+            );
         }
     }
 
     /**
      * Attempts to create actual wallet content from blockchain data
      */
-    private void tryCreateActualWalletContent(String walletAddress, Path walletFolder) {
+    private void tryCreateActualWalletContent(
+        String walletAddress,
+        Path walletFolder
+    ) {
         try {
             // This would query the blockchain for actual wallet content
             // For now, we'll create placeholder content
 
             Path readmeFile = walletFolder.resolve("README.md");
-            String readmeContent = String.format("# Wallet %s%n%n" +
+            String readmeContent = String.format(
+                "# Wallet %s%n%n" +
                     "This folder contains the blockchain data for wallet address: `%s`%n%n" +
                     "## Structure%n" +
                     "- `tokens/` - Token files and balances%n" +
                     "- `folders/` - Sub-folders and their contents%n" +
                     "- `wallet_info.txt` - Basic wallet information%n%n" +
                     "Generated by F1r3Drive Genesis Wallet Extractor%n",
-                    walletAddress, walletAddress);
+                walletAddress,
+                walletAddress
+            );
 
             Files.write(readmeFile, readmeContent.getBytes());
-
         } catch (Exception e) {
-            LOGGER.debug("Could not create actual wallet content for {}: {}", walletAddress, e.getMessage());
+            LOGGER.debug(
+                "Could not create actual wallet content for {}: {}",
+                walletAddress,
+                e.getMessage()
+            );
         }
     }
 
     /**
      * Creates folders for specific wallet if address is provided, otherwise discovers all from genesis
      */
-    public CompletableFuture<WalletExtractionResult> extractAndCreateWalletFolders(String specificWalletAddress) {
-        if (specificWalletAddress != null && !specificWalletAddress.trim().isEmpty()) {
-            LOGGER.info("Creating folder for specific wallet: {}", specificWalletAddress);
-            return createPhysicalFoldersForWallets(List.of(specificWalletAddress));
+    public CompletableFuture<
+        WalletExtractionResult
+    > extractAndCreateWalletFolders(String specificWalletAddress) {
+        if (
+            specificWalletAddress != null &&
+            !specificWalletAddress.trim().isEmpty()
+        ) {
+            LOGGER.info(
+                "Creating folder for specific wallet: {}",
+                specificWalletAddress
+            );
+            return createPhysicalFoldersForWallets(
+                List.of(specificWalletAddress)
+            );
         } else {
             LOGGER.info("Extracting all wallets from genesis block");
-            return extractWalletAddressesFromGenesis()
-                    .thenCompose(this::createPhysicalFoldersForWallets);
+            return extractWalletAddressesFromGenesis().thenCompose(
+                this::createPhysicalFoldersForWallets
+            );
         }
     }
 
@@ -221,11 +432,11 @@ public class GenesisWalletExtractor {
      */
     private List<String> getTestWalletAddresses() {
         return Arrays.asList(
-                "111AtahZeefej4tvVR6ti9TJtv8yxLebT31SCEVDCKMNikBk5r3g",
-                "111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA",
-                "111129p33f7vaRrpLqK8Nr35Y2aacAjrR5pd6PCzqcdrMuPHzymczH",
-                "1111LAd2PWaHsw84gxarNx99YVK2aZhCThhrPsWTV7cs1BPcvHftP",
-                "1111ocWgUJb5QqnYCvKiPtzcmMyfvD3gS5Eg84NtaLkUtRfw3TDS8"
+            "111AtahZeefej4tvVR6ti9TJtv8yxLebT31SCEVDCKMNikBk5r3g",
+            "111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA",
+            "111129p33f7vaRrpLqK8Nr35Y2aacAjrR5pd6PCzqcdrMuPHzymczH",
+            "1111LAd2PWaHsw84gxarNx99YVK2aZhCThhrPsWTV7cs1BPcvHftP",
+            "1111ocWgUJb5QqnYCvKiPtzcmMyfvD3gS5Eg84NtaLkUtRfw3TDS8"
         );
     }
 
@@ -233,6 +444,7 @@ public class GenesisWalletExtractor {
      * Result class for wallet extraction operations
      */
     public static class WalletExtractionResult {
+
         private final Map<String, String> successfulWallets = new HashMap<>();
         private final Map<String, String> failedWallets = new HashMap<>();
         private String globalError;
@@ -271,8 +483,12 @@ public class GenesisWalletExtractor {
 
         @Override
         public String toString() {
-            return String.format("WalletExtractionResult{successful=%d, failed=%d, hasGlobalError=%s}",
-                    successfulWallets.size(), failedWallets.size(), globalError != null);
+            return String.format(
+                "WalletExtractionResult{successful=%d, failed=%d, hasGlobalError=%s}",
+                successfulWallets.size(),
+                failedWallets.size(),
+                globalError != null
+            );
         }
     }
 }

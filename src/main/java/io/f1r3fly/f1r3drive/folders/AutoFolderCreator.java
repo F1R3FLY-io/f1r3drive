@@ -1,23 +1,25 @@
 package io.f1r3fly.f1r3drive.folders;
 
-import io.f1r3fly.f1r3drive.blockchain.BlockchainContext;
 import io.f1r3fly.f1r3drive.blockchain.client.F1r3flyBlockchainClient;
+import io.f1r3fly.f1r3drive.blockchain.rholang.RholangExpressionConstructor;
 import io.f1r3fly.f1r3drive.blockchain.wallet.RevWalletInfo;
 import io.f1r3fly.f1r3drive.errors.F1r3DriveError;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import rhoapi.RhoTypes;
 
 /**
  * Automatically discovers existing tokens from blockchain and creates corresponding folders
- * Integrates TokenDiscovery with FolderTokenService to populate /Users/jedoan/demo-f1r3drive
+ * Integrates TokenDiscovery with FolderTokenService to populate ~/demo-f1r3drive
  */
 public class AutoFolderCreator {
 
@@ -27,6 +29,29 @@ public class AutoFolderCreator {
 
     private final TokenDiscovery tokenDiscovery;
     private final FolderTokenService folderTokenService;
+
+    // Token denominations (same as TokenDirectory)
+    private static final List<Long> DENOMINATIONS = Arrays.asList(
+        1_000_000_000_000_000_000L, // 1 quintillion
+        100_000_000_000_000_000L, // 100 quadrillion
+        10_000_000_000_000_000L, // 10 quadrillion
+        1_000_000_000_000_000L, // 1 quadrillion
+        100_000_000_000_000L, // 100 trillion
+        10_000_000_000_000L, // 10 trillion
+        1_000_000_000_000L, // 1 trillion
+        100_000_000_000L, // 100 billion
+        10_000_000_000L, // 10 billion
+        1_000_000_000L, // 1 billion
+        100_000_000L, // 100 million
+        10_000_000L, // 10 million
+        1_000_000L, // 1 million
+        100_000L, // 100K
+        10_000L, // 10K
+        1_000L, // 1K
+        100L, // 100
+        10L, // 10
+        1L // 1
+    );
     private final F1r3flyBlockchainClient blockchainClient;
     private final String baseDirectory;
 
@@ -41,7 +66,7 @@ public class AutoFolderCreator {
         this(
             blockchainClient,
             folderTokenService,
-            "/Users/jedoan/demo-f1r3drive"
+            System.getProperty("user.home") + "/demo-f1r3drive"
         );
     }
 
@@ -145,8 +170,8 @@ public class AutoFolderCreator {
             discoveryResult.getWalletAddresses().size()
         );
 
-        // First create wallet directories
-        createWalletDirectories(discoveryResult.getWalletAddresses(), result);
+        // First create .tokens directories in main wallet folders
+        createTokenDirectories(discoveryResult.getWalletAddresses(), result);
 
         // Then create folder token structures
         CompletableFuture<Void> folderCreationTasks = CompletableFuture.allOf(
@@ -174,32 +199,32 @@ public class AutoFolderCreator {
     }
 
     /**
-     * Creates wallet directories in the base directory
+     * Creates .tokens directories in main wallet folders
      */
-    private void createWalletDirectories(
+    private void createTokenDirectories(
         Set<String> walletAddresses,
         FolderCreationResult result
     ) {
         LOGGER.info(
-            "Creating wallet directories for addresses: {}",
+            "Creating .tokens directories in main wallet folders for addresses: {}",
             walletAddresses
         );
 
         for (String walletAddress : walletAddresses) {
             try {
-                Path walletPath = createWalletDirectory(walletAddress);
+                Path tokensPath = createTokensDirectory(walletAddress);
                 result.addCreatedWalletDir(
                     walletAddress,
-                    walletPath.toString()
+                    tokensPath.toString()
                 );
                 LOGGER.info(
-                    "Created wallet directory: {} -> {}",
+                    "Created .tokens directory: {} -> {}",
                     walletAddress,
-                    walletPath
+                    tokensPath
                 );
             } catch (IOException e) {
                 LOGGER.error(
-                    "Failed to create wallet directory for: {}",
+                    "Failed to create .tokens directory for: {}",
                     walletAddress,
                     e
                 );
@@ -209,37 +234,159 @@ public class AutoFolderCreator {
     }
 
     /**
-     * Creates a directory for a specific wallet address
+     * Creates a .tokens directory in the main wallet folder
      */
-    private Path createWalletDirectory(String walletAddress)
+    private Path createTokensDirectory(String walletAddress)
         throws IOException {
-        // Create shortened directory name from wallet address
-        String dirName = createWalletDirName(walletAddress);
-        Path walletPath = Paths.get(baseDirectory, dirName);
+        // Find the main wallet directory (full wallet address name)
+        Path mainWalletPath = Paths.get(baseDirectory, walletAddress);
 
-        if (!Files.exists(walletPath)) {
-            Files.createDirectories(walletPath);
-            LOGGER.debug("Created directory: {}", walletPath);
-        } else {
-            LOGGER.debug("Directory already exists: {}", walletPath);
+        // Check if main wallet directory exists
+        if (!Files.exists(mainWalletPath)) {
+            LOGGER.debug(
+                "Main wallet directory doesn't exist yet: {}",
+                mainWalletPath
+            );
+            return null;
         }
 
-        return walletPath;
+        // Create .tokens directory inside the main wallet folder
+        Path tokensPath = mainWalletPath.resolve(".tokens");
+
+        if (!Files.exists(tokensPath)) {
+            Files.createDirectories(tokensPath);
+
+            // Create physical token files based on wallet balance
+            try {
+                createTokenFilesForWallet(walletAddress, tokensPath);
+                LOGGER.debug(
+                    "Created .tokens directory with token files: {}",
+                    tokensPath
+                );
+            } catch (Exception e) {
+                LOGGER.warn(
+                    "Failed to create token files for wallet {}: {}",
+                    walletAddress,
+                    e.getMessage()
+                );
+                LOGGER.debug("Created empty .tokens directory: {}", tokensPath);
+            }
+        } else {
+            LOGGER.debug(".tokens directory already exists: {}", tokensPath);
+        }
+
+        return tokensPath;
     }
 
     /**
-     * Creates a readable directory name from wallet address
+     * Creates physical token files based on wallet balance from blockchain
      */
-    private String createWalletDirName(String walletAddress) {
-        // Use first and last 8 characters for readability
-        if (walletAddress.length() > 16) {
-            return String.format(
-                "wallet_%s...%s",
-                walletAddress.substring(0, 8),
-                walletAddress.substring(walletAddress.length() - 8)
+    private void createTokenFilesForWallet(
+        String walletAddress,
+        Path tokensPath
+    ) throws Exception {
+        long balance = 0;
+        Map<Long, Integer> tokenMap;
+
+        try {
+            // Query wallet balance from blockchain
+            balance = getWalletBalance(walletAddress);
+            tokenMap = splitBalance(balance);
+
+            LOGGER.info(
+                "Creating token files for wallet {} with balance {}: {}",
+                walletAddress,
+                balance,
+                tokenMap
+            );
+        } catch (Exception e) {
+            LOGGER.warn(
+                "Failed to get balance from blockchain for wallet {}, creating demo tokens: {}",
+                walletAddress,
+                e.getMessage()
+            );
+
+            // Fallback: create demo tokens when blockchain is unavailable
+            tokenMap = createDemoTokenMap();
+            LOGGER.info(
+                "Creating demo token files for wallet {}: {}",
+                walletAddress,
+                tokenMap
             );
         }
-        return "wallet_" + walletAddress;
+
+        if (tokenMap.isEmpty()) {
+            LOGGER.info("No tokens to create for wallet {}", walletAddress);
+            return;
+        }
+
+        // Create physical token files
+        for (Map.Entry<Long, Integer> entry : tokenMap.entrySet()) {
+            long denomination = entry.getKey();
+            int count = entry.getValue();
+
+            for (int i = 0; i < count; i++) {
+                String tokenFileName = denomination + "-REV." + i + ".token";
+                Path tokenFilePath = tokensPath.resolve(tokenFileName);
+
+                // Create empty token file
+                Files.createFile(tokenFilePath);
+                LOGGER.debug("Created token file: {}", tokenFileName);
+            }
+        }
+
+        LOGGER.info(
+            "Created {} token files for wallet {}",
+            tokenMap.values().stream().mapToInt(Integer::intValue).sum(),
+            walletAddress
+        );
+    }
+
+    /**
+     * Gets wallet balance from blockchain
+     */
+    private long getWalletBalance(String walletAddress) throws F1r3DriveError {
+        String checkBalanceRho = RholangExpressionConstructor.checkBalanceRho(
+            walletAddress
+        );
+        RhoTypes.Expr expr = blockchainClient.exploratoryDeploy(
+            checkBalanceRho
+        );
+
+        if (!expr.hasGInt()) {
+            throw new F1r3DriveError(
+                "Invalid balance data for wallet: " + walletAddress
+            );
+        }
+
+        return expr.getGInt();
+    }
+
+    /**
+     * Splits balance into denominations (same logic as TokenDirectory)
+     */
+    private Map<Long, Integer> splitBalance(long balance) {
+        Map<Long, Integer> tokenMap = new HashMap<>();
+
+        for (long denomination : DENOMINATIONS) {
+            int count = (int) (balance / denomination);
+            if (count > 0) {
+                tokenMap.put(denomination, count);
+                balance %= denomination;
+            }
+        }
+
+        return tokenMap;
+    }
+
+    /**
+     * Creates demo token map for testing when blockchain is unavailable
+     */
+    private Map<Long, Integer> createDemoTokenMap() {
+        Map<Long, Integer> tokenMap = new HashMap<>();
+        // Create 5 tokens of 10 quadrillion denomination
+        tokenMap.put(10_000_000_000_000_000L, 5);
+        return tokenMap;
     }
 
     /**
@@ -316,12 +463,14 @@ public class AutoFolderCreator {
                 FolderCreationResult result = new FolderCreationResult();
 
                 try {
-                    // Create wallet directory
-                    Path walletPath = createWalletDirectory(walletAddress);
-                    result.addCreatedWalletDir(
-                        walletAddress,
-                        walletPath.toString()
-                    );
+                    // Create .tokens directory in main wallet folder
+                    Path tokensPath = createTokensDirectory(walletAddress);
+                    if (tokensPath != null) {
+                        result.addCreatedWalletDir(
+                            walletAddress,
+                            tokensPath.toString()
+                        );
+                    }
 
                     // Create folder tokens
                     RevWalletInfo walletInfo = createDummyWalletInfo(

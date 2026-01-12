@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
 import rhoapi.RhoTypes;
 
 /**
- * Manages folder tokens from blockchain in the /Users/jedoan/demo-f1r3drive directory
+ * Manages folder tokens from blockchain in the ~/demo-f1r3drive directory
  * Provides automatic folder deletion when the application closes
  * Uses in-memory storage for controlling folder token operations
  */
@@ -26,8 +26,9 @@ public class FolderTokenManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(
         FolderTokenManager.class
     );
+    // Primary base directory for all physical folders (unified location)
     private static final String DEFAULT_BASE_DIRECTORY =
-        "/Users/jedoan/demo-f1r3drive";
+        System.getProperty("user.home") + "/demo-f1r3drive";
 
     // In-memory storage for controlling folder tokens
     private final Map<String, FolderToken> folderTokens =
@@ -58,7 +59,7 @@ public class FolderTokenManager {
             new Thread(this::cleanup, "FolderTokenManager-Cleanup")
         );
 
-        // Create base directory if it doesn't exist
+        // Create base directory if it doesn't exist (primary physical folder location)
         createBaseDirectoryIfNotExists();
 
         LOGGER.info(
@@ -255,7 +256,8 @@ public class FolderTokenManager {
     }
 
     /**
-     * Creates base directory if it doesn't exist
+     * Creates the primary base directory for all physical folders if it doesn't exist.
+     * This is the unified location that replaces separate physical wallet directories.
      */
     private void createBaseDirectoryIfNotExists() {
         try {
