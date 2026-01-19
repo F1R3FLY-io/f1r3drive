@@ -439,3 +439,21 @@ tasks.withType(ProcessResources) {
 tasks.named('processResources') {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE // or EXCLUDE, depending on desired behavior
 }
+
+
+
+// MacOS native run task
+task runMacOS(type: JavaExec) {
+    group = 'application'
+    description = 'Runs the F1r3Drive macOS CLI'
+    mainClass = 'io.f1r3fly.f1r3drive.app.F1r3DriveCli'
+    classpath = sourceSets.macos.runtimeClasspath
+    
+    // Allow passing arguments
+    if (project.hasProperty('args')) {
+        args(project.args.split(' '))
+    }
+    
+    // Pass system properties
+    systemProperties System.getProperties()
+}

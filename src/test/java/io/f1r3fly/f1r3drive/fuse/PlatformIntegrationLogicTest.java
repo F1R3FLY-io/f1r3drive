@@ -43,9 +43,9 @@ class PlatformIntegrationLogicTest {
         // Create real instances for testing
         eventsManager = new StateChangeEventsManager();
         changeListener = new F1r3DriveChangeListener(
-            mockFileSystem,
-            mockPlaceholderManager
-        );
+                mockFileSystem,
+                mockPlaceholderManager,
+                "/tmp/test-mount");
     }
 
     @Test
@@ -61,9 +61,8 @@ class PlatformIntegrationLogicTest {
         // Test notification methods work
         assertDoesNotThrow(() -> {
             eventsManager.notifyFileChange(
-                "/test/path",
-                StateChangeEventsManager.ChangeType.CREATED
-            );
+                    "/test/path",
+                    StateChangeEventsManager.ChangeType.CREATED);
             eventsManager.notifyFileMove("/old/path", "/new/path");
             eventsManager.notifyExternalChange();
         });
@@ -78,11 +77,11 @@ class PlatformIntegrationLogicTest {
 
         // Setup mock responses
         when(mockPlaceholderManager.isPlaceholder("/test/placeholder.txt"))
-            .thenReturn(true);
+                .thenReturn(true);
         when(mockPlaceholderManager.isPlaceholder("/test/regular.txt"))
-            .thenReturn(false);
+                .thenReturn(false);
         when(mockPlaceholderManager.loadContent("/test/placeholder.txt"))
-            .thenReturn("test content".getBytes());
+                .thenReturn("test content".getBytes());
 
         // Test file created with placeholder
         changeListener.onFileCreated("/test/placeholder.txt");
@@ -114,11 +113,10 @@ class PlatformIntegrationLogicTest {
             @Override
             public FileMetadata getFileMetadata(String path) {
                 return new FileMetadata(
-                    1024,
-                    System.currentTimeMillis(),
-                    "test-checksum",
-                    false
-                );
+                        1024,
+                        System.currentTimeMillis(),
+                        "test-checksum",
+                        false);
             }
 
             @Override
@@ -193,16 +191,20 @@ class PlatformIntegrationLogicTest {
                 }
 
                 @Override
-                public void onFileSavedToBlockchain(String path, byte[] content) {}
+                public void onFileSavedToBlockchain(String path, byte[] content) {
+                }
 
                 @Override
-                public void onFileDeletedFromBlockchain(String path) {}
+                public void onFileDeletedFromBlockchain(String path) {
+                }
 
                 @Override
-                public void preloadFile(String path, int priority) {}
+                public void preloadFile(String path, int priority) {
+                }
 
                 @Override
-                public void clearCache(String path) {}
+                public void clearCache(String path) {
+                }
 
                 @Override
                 public CacheStatistics getCacheStatistics() {
@@ -232,9 +234,8 @@ class PlatformIntegrationLogicTest {
         // 3. Simulate platform event notification
         assertDoesNotThrow(() -> {
             eventsManager.notifyFileChange(
-                "/test/file.txt",
-                StateChangeEventsManager.ChangeType.ACCESSED
-            );
+                    "/test/file.txt",
+                    StateChangeEventsManager.ChangeType.ACCESSED);
         });
 
         // 4. Give some time for async processing (simplified for test)
@@ -286,7 +287,7 @@ class PlatformIntegrationLogicTest {
         // Setup PlaceholderManager to throw exception
         when(mockPlaceholderManager.isPlaceholder(anyString())).thenReturn(true);
         when(mockPlaceholderManager.loadContent(anyString()))
-            .thenThrow(new RuntimeException("Simulated load error"));
+                .thenThrow(new RuntimeException("Simulated load error"));
 
         // Should not throw exception despite internal error
         assertDoesNotThrow(() -> {

@@ -28,6 +28,7 @@ import io.f1r3fly.f1r3drive.filesystem.utils.PathUtils;
 import io.f1r3fly.f1r3drive.placeholder.CacheConfiguration;
 import io.f1r3fly.f1r3drive.placeholder.PlaceholderManager;
 import io.f1r3fly.f1r3drive.platform.FileChangeCallback;
+import io.f1r3fly.f1r3drive.platform.macos.FileProviderIntegration;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
@@ -52,13 +53,13 @@ import rhoapi.RhoTypes;
  * - Token file operations with real balance tracking
  * - Directory operations with blockchain persistence
  *
- * All mock/placeholder functionality has been replaced with real blockchain calls.
+ * All mock/placeholder functionality has been replaced with real blockchain
+ * calls.
  */
 public class InMemoryFileSystem implements FileSystem {
 
     private static final Logger logger = LoggerFactory.getLogger(
-        InMemoryFileSystem.class
-    );
+            InMemoryFileSystem.class);
 
     @NotNull
     private final RootDirectory rootDirectory;
@@ -79,25 +80,32 @@ public class InMemoryFileSystem implements FileSystem {
     private final CacheStrategy cacheStrategy;
 
     /**
+     * Optional macOS FileProvider integration for native Finder support.
+     * When set, file operations will be synchronized with macOS FileProvider
+     * framework.
+     */
+    @Nullable
+    private FileProviderIntegration fileProviderIntegration;
+
+    /**
      * Creates a new InMemoryFileSystem with real blockchain integration.
      *
-     * @param f1R3FlyBlockchainClient The blockchain client for real blockchain operations
+     * @param f1R3FlyBlockchainClient The blockchain client for real blockchain
+     *                                operations
      * @throws F1r3DriveError if filesystem initialization fails
      */
     public InMemoryFileSystem(F1r3flyBlockchainClient f1R3FlyBlockchainClient)
-        throws F1r3DriveError {
+            throws F1r3DriveError {
         logger.info(
-            "Initializing InMemoryFileSystem with real blockchain integration"
-        );
+                "Initializing InMemoryFileSystem with real blockchain integration");
 
         this.blockchainClient = f1R3FlyBlockchainClient;
         this.stateChangeEventsManager = new StateChangeEventsManager();
         this.stateChangeEventsManager.start();
 
         this.deployDispatcher = new DeployDispatcher(
-            f1R3FlyBlockchainClient,
-            stateChangeEventsManager
-        );
+                f1R3FlyBlockchainClient,
+                stateChangeEventsManager);
         deployDispatcher.startBackgroundDeploy();
 
         // Initialize Caffeine-based cache system
@@ -110,8 +118,7 @@ public class InMemoryFileSystem implements FileSystem {
         // No separate physical wallet directories are created
 
         logger.info(
-            "InMemoryFileSystem initialized successfully with on-demand wallet directory creation"
-        );
+                "InMemoryFileSystem initialized successfully with on-demand wallet directory creation");
     }
 
     /**
@@ -120,26 +127,24 @@ public class InMemoryFileSystem implements FileSystem {
     private CacheStrategy initializeCacheStrategy() {
         try {
             java.nio.file.Path cacheDir = java.nio.file.Paths.get(
-                System.getProperty("user.home"),
-                ".f1r3drive",
-                "cache"
-            );
+                    System.getProperty("user.home"),
+                    ".f1r3drive",
+                    "cache");
 
             return new TieredCacheStrategy(
-                100 * 1024 * 1024L, // 100MB memory cache
-                1024 * 1024L, // 1MB memory threshold
-                cacheDir, // Disk cache directory
-                1024 * 1024 * 1024L, // 1GB disk cache
-                30 * 60 * 1000L // 30 minutes expiration
+                    100 * 1024 * 1024L, // 100MB memory cache
+                    1024 * 1024L, // 1MB memory threshold
+                    cacheDir, // Disk cache directory
+                    1024 * 1024 * 1024L, // 1GB disk cache
+                    30 * 60 * 1000L // 30 minutes expiration
             );
         } catch (Exception e) {
             logger.warn(
-                "Failed to initialize tiered cache, falling back to memory-only",
-                e
-            );
+                    "Failed to initialize tiered cache, falling back to memory-only",
+                    e);
             return new io.f1r3fly.f1r3drive.cache.MemoryOnlyCacheStrategy(
-                100 * 1024 * 1024L, // 100MB memory cache
-                30 * 60 * 1000L // 30 minutes expiration
+                    100 * 1024 * 1024L, // 100MB memory cache
+                    30 * 60 * 1000L // 30 minutes expiration
             );
         }
     }
@@ -149,11 +154,11 @@ public class InMemoryFileSystem implements FileSystem {
      */
     private PlaceholderManager initializePlaceholderManager() {
         CacheConfiguration cacheConfig = CacheConfiguration.builder()
-            .maxCacheSize(100 * 1024 * 1024L)
-            .evictionPolicy(CacheConfiguration.EvictionPolicy.LRU)
-            .withCacheStrategyType(CacheConfiguration.CacheStrategyType.TIERED)
-            .enableCaffeineStats(true)
-            .build();
+                .maxCacheSize(100 * 1024 * 1024L)
+                .evictionPolicy(CacheConfiguration.EvictionPolicy.LRU)
+                .withCacheStrategyType(CacheConfiguration.CacheStrategyType.TIERED)
+                .enableCaffeineStats(true)
+                .build();
 
         FileChangeCallback fileCallback = new FileChangeCallback() {
             @Override
@@ -196,11 +201,10 @@ public class InMemoryFileSystem implements FileSystem {
                     if (file instanceof BlockchainFile) {
                         BlockchainFile blockchainFile = (BlockchainFile) file;
                         return new FileMetadata(
-                            blockchainFile.getSize(),
-                            blockchainFile.getLastUpdated(),
-                            null, // checksum not available
-                            false
-                        );
+                                blockchainFile.getSize(),
+                                blockchainFile.getLastUpdated(),
+                                null, // checksum not available
+                                false);
                     }
                 } catch (Exception e) {
                     logger.debug("Failed to get metadata for: {}", path);
@@ -223,10 +227,9 @@ public class InMemoryFileSystem implements FileSystem {
             @Override
             public void preloadFile(String path, int priority) {
                 logger.debug(
-                    "Preloading file: {} (priority: {})",
-                    path,
-                    priority
-                );
+                        "Preloading file: {} (priority: {})",
+                        path,
+                        priority);
                 try {
                     loadFileContent(path);
                 } catch (Exception e) {
@@ -244,16 +247,194 @@ public class InMemoryFileSystem implements FileSystem {
             public CacheStatistics getCacheStatistics() {
                 var stats = cacheStrategy.getStatistics();
                 return new CacheStatistics(
-                    stats.getL1Hits() + stats.getL2Hits(),
-                    stats.getMisses(),
-                    stats.getL1Size() + stats.getL2Size(),
-                    100 * 1024 * 1024L, // Max cache size
-                    (int) stats.getL1Size()
-                );
+                        stats.getL1Hits() + stats.getL2Hits(),
+                        stats.getMisses(),
+                        stats.getL1Size() + stats.getL2Size(),
+                        100 * 1024 * 1024L, // Max cache size
+                        (int) stats.getL1Size());
             }
         };
 
         return new PlaceholderManager(fileCallback, cacheConfig);
+    }
+
+    /**
+     * Sets the FileProvider integration for macOS native Finder support.
+     * When set, file operations will be automatically synchronized with the
+     * FileProvider.
+     *
+     * @param fileProvider the FileProvider integration instance
+     */
+    public void setFileProviderIntegration(
+            FileProviderIntegration fileProvider) {
+        this.fileProviderIntegration = fileProvider;
+
+        if (fileProvider != null) {
+            logger.info("Configuring FileProvider integration");
+
+            // Set up callback for FileProvider to load content from blockchain
+            fileProvider.setFileChangeCallback(new FileChangeCallback() {
+                @Override
+                public byte[] loadFileContent(String path) {
+                    logger.debug("FileProvider requesting content for: {}", path);
+                    return loadFileContentFromBlockchain(path);
+                }
+
+                @Override
+                public boolean fileExistsInBlockchain(String path) {
+                    try {
+                        getFileByPath(path);
+                        return true;
+                    } catch (PathNotFound e) {
+                        return false;
+                    }
+                }
+
+                @Override
+                public FileMetadata getFileMetadata(String path) {
+                    try {
+                        File file = getFileByPath(path);
+                        if (file instanceof BlockchainFile) {
+                            BlockchainFile bf = (BlockchainFile) file;
+                            return new FileMetadata(
+                                    bf.getSize(),
+                                    bf.getLastUpdated(),
+                                    null, // checksum not available
+                                    false);
+                        }
+                    } catch (Exception e) {
+                        logger.debug("Failed to get metadata for: {}", path);
+                    }
+                    return null;
+                }
+
+                @Override
+                public void onFileSavedToBlockchain(String path, byte[] content) {
+                    logger.debug("File saved to blockchain: {}", path);
+                    cacheStrategy.invalidate(path);
+                }
+
+                @Override
+                public void onFileDeletedFromBlockchain(String path) {
+                    logger.debug("File deleted from blockchain: {}", path);
+                    cacheStrategy.invalidate(path);
+                }
+
+                @Override
+                public void preloadFile(String path, int priority) {
+                    logger.debug("Preload requested for: {} (priority: {})", path, priority);
+                    try {
+                        loadFileContent(path);
+                    } catch (Exception e) {
+                        logger.debug("Failed to preload: {}", path);
+                    }
+                }
+
+                @Override
+                public void clearCache(String path) {
+                    cacheStrategy.invalidate(path);
+                    logger.debug("Cache cleared for: {}", path);
+                }
+
+                @Override
+                public CacheStatistics getCacheStatistics() {
+                    var stats = cacheStrategy.getStatistics();
+                    return new CacheStatistics(
+                            stats.getL1Hits() + stats.getL2Hits(),
+                            stats.getMisses(),
+                            stats.getL1Size() + stats.getL2Size(),
+                            100 * 1024 * 1024L,
+                            (int) stats.getL1Size());
+                }
+            });
+
+            // Set bidirectional reference
+            fileProvider.setInMemoryFileSystem(this);
+
+            logger.info("FileProvider integration configured successfully");
+        }
+    }
+
+    /**
+     * Loads file content from blockchain for FileProvider materialization.
+     * This method is called when FileProvider needs to materialize a placeholder.
+     *
+     * @param path the file path
+     * @return file content as byte array, or null if not found
+     */
+    private byte[] loadFileContentFromBlockchain(String path) {
+        try {
+            File file = getFileByPath(path);
+            if (file instanceof BlockchainFile) {
+                BlockchainFile blockchainFile = (BlockchainFile) file;
+                ensureFileContentLoadedWithCache(blockchainFile);
+
+                long size = blockchainFile.getSize();
+                if (size > 0) {
+                    byte[] content = new byte[(int) size];
+                    FSPointer buffer = createFSPointer(content);
+                    blockchainFile.read(buffer, size, 0);
+                    return content;
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Failed to load file content from blockchain: {}", path, e);
+        }
+        return null;
+    }
+
+    /**
+     * Synchronizes the entire filesystem structure with FileProvider.
+     * Creates placeholders for all files and directories in the filesystem.
+     */
+    public void syncWithFileProvider() {
+        if (fileProviderIntegration == null ||
+                !fileProviderIntegration.isInitialized()) {
+            logger.warn("FileProvider not initialized, skipping sync");
+            return;
+        }
+
+        logger.info("Syncing filesystem structure with FileProvider");
+        syncDirectoryRecursive(rootDirectory, "");
+        logger.info("Filesystem sync with FileProvider completed");
+    }
+
+    /**
+     * Recursively synchronizes a directory and its children with FileProvider.
+     *
+     * @param dir      the directory to sync
+     * @param basePath the base path for relative path construction
+     */
+    private void syncDirectoryRecursive(Directory dir, String basePath) {
+        Set<Path> children = dir.getChildren();
+
+        for (Path child : children) {
+            String relativePath = basePath.isEmpty()
+                    ? child.getName()
+                    : basePath + "/" + child.getName();
+
+            if (child instanceof Directory) {
+                // Create placeholder for directory
+                fileProviderIntegration.createPlaceholder(
+                        relativePath,
+                        0,
+                        System.currentTimeMillis(),
+                        true);
+
+                // Recursively sync subdirectories
+                syncDirectoryRecursive((Directory) child, relativePath);
+
+            } else if (child instanceof BlockchainFile) {
+                BlockchainFile file = (BlockchainFile) child;
+
+                // Create placeholder for file
+                fileProviderIntegration.createPlaceholder(
+                        relativePath,
+                        file.getSize(),
+                        file.getLastUpdated(),
+                        false);
+            }
+        }
     }
 
     /**
@@ -278,8 +459,8 @@ public class InMemoryFileSystem implements FileSystem {
 
         int lastSeparatorIndex = path.lastIndexOf(pathSeparator());
         return lastSeparatorIndex == -1
-            ? path
-            : path.substring(lastSeparatorIndex + 1);
+                ? path
+                : path.substring(lastSeparatorIndex + 1);
     }
 
     /**
@@ -295,8 +476,7 @@ public class InMemoryFileSystem implements FileSystem {
             Path parent = getPath(parentPath);
             if (!(parent instanceof Directory)) {
                 throw new IllegalArgumentException(
-                    "Parent path is not a directory: " + parentPath
-                );
+                        "Parent path is not a directory: " + parentPath);
             }
             return (Directory) parent;
         } catch (PathNotFound e) {
@@ -308,7 +488,7 @@ public class InMemoryFileSystem implements FileSystem {
      * Internal helper for getting parent directory.
      */
     private Directory getParentDirectoryInternal(String path)
-        throws PathNotFound {
+            throws PathNotFound {
         Directory parent = getParentDirectory(path);
         if (parent == null) {
             throw new PathNotFound("Parent directory not found for: " + path);
@@ -329,7 +509,7 @@ public class InMemoryFileSystem implements FileSystem {
     }
 
     public Directory getDirectoryByPath(String path)
-        throws PathNotFound, PathIsNotADirectory {
+            throws PathNotFound, PathIsNotADirectory {
         Path p = getPath(path);
         if (!(p instanceof Directory)) {
             throw new PathIsNotADirectory(path);
@@ -350,43 +530,50 @@ public class InMemoryFileSystem implements FileSystem {
      * Files are immediately queued for blockchain deployment.
      */
     public void createFile(String path, long mode)
-        throws OperationNotPermitted {
+            throws OperationNotPermitted {
         try {
             Directory parent = getParentDirectoryInternal(path);
             String fileName = getLastComponent(path);
 
             // Record operation cost
             if (parent instanceof BlockchainDirectory) {
-                String walletAddress =
-                    ((BlockchainDirectory) parent).getBlockchainContext()
+                String walletAddress = ((BlockchainDirectory) parent).getBlockchainContext()
                         .getWalletInfo()
                         .revAddress();
                 TokenDirectory.recordOperationCost(
-                    walletAddress,
-                    "CREATE_FILE"
-                );
+                        walletAddress,
+                        "CREATE_FILE");
             }
 
             // Create blockchain file that will be deployed to the blockchain
             BlockchainFile newFile = new BlockchainFile(
-                parent.getBlockchainContext(),
-                fileName,
-                parent
-            );
+                    parent.getBlockchainContext(),
+                    fileName,
+                    parent);
 
             parent.addChild(newFile);
 
+            // Sync with FileProvider if available
+            if (fileProviderIntegration != null &&
+                    fileProviderIntegration.isInitialized()) {
+                fileProviderIntegration.createPlaceholder(
+                        path,
+                        0,
+                        System.currentTimeMillis(),
+                        false);
+                logger.debug("Created FileProvider placeholder for: {}", path);
+            }
+
             logger.debug(
-                "Created blockchain file: {} (will be deployed)",
-                path
-            );
+                    "Created blockchain file: {} (will be deployed)",
+                    path);
         } catch (PathNotFound e) {
             throw OperationNotPermitted.instance;
         }
     }
 
     public void getAttributes(String path, FSFileStat stbuf, FSContext context)
-        throws PathNotFound {
+            throws PathNotFound {
         Path p = getPath(path);
         p.getAttr(stbuf, context);
     }
@@ -395,30 +582,38 @@ public class InMemoryFileSystem implements FileSystem {
      * Creates a directory with blockchain persistence.
      */
     public void makeDirectory(String path, long mode)
-        throws OperationNotPermitted {
+            throws OperationNotPermitted {
         try {
             Directory parent = getParentDirectoryInternal(path);
             String dirName = getLastComponent(path);
 
             // Record operation cost
             if (parent instanceof BlockchainDirectory) {
-                String walletAddress =
-                    ((BlockchainDirectory) parent).getBlockchainContext()
+                String walletAddress = ((BlockchainDirectory) parent).getBlockchainContext()
                         .getWalletInfo()
                         .revAddress();
                 TokenDirectory.recordOperationCost(
-                    walletAddress,
-                    "CREATE_DIRECTORY"
-                );
+                        walletAddress,
+                        "CREATE_DIRECTORY");
             }
 
             // Create directory using the parent's mkdir method
             parent.mkdir(dirName);
 
+            // Sync with FileProvider if available
+            if (fileProviderIntegration != null &&
+                    fileProviderIntegration.isInitialized()) {
+                fileProviderIntegration.createPlaceholder(
+                        path,
+                        0,
+                        System.currentTimeMillis(),
+                        true);
+                logger.debug("Created FileProvider placeholder for directory: {}", path);
+            }
+
             logger.debug(
-                "Created blockchain directory: {} (will be persisted)",
-                path
-            );
+                    "Created blockchain directory: {} (will be persisted)",
+                    path);
         } catch (PathNotFound e) {
             throw OperationNotPermitted.instance;
         }
@@ -429,16 +624,16 @@ public class InMemoryFileSystem implements FileSystem {
      * If file is not cached, fetches from blockchain.
      */
     public int readFile(String path, FSPointer buf, long size, long offset)
-        throws PathNotFound, PathIsNotAFile, IOException {
+            throws PathNotFound, PathIsNotAFile, IOException {
         File file = getFileByPath(path);
 
         // Record operation cost
         if (file instanceof BlockchainFile) {
             BlockchainFile blockchainFile = (BlockchainFile) file;
             String walletAddress = blockchainFile
-                .getBlockchainContext()
-                .getWalletInfo()
-                .revAddress();
+                    .getBlockchainContext()
+                    .getWalletInfo()
+                    .revAddress();
             TokenDirectory.recordOperationCost(walletAddress, "READ_FILE");
 
             ensureFileContentLoaded(blockchainFile);
@@ -459,9 +654,8 @@ public class InMemoryFileSystem implements FileSystem {
             }
         } catch (Exception e) {
             logger.warn(
-                "Failed to load file content from blockchain: {}",
-                e.getMessage()
-            );
+                    "Failed to load file content from blockchain: {}",
+                    e.getMessage());
         }
     }
 
@@ -481,18 +675,16 @@ public class InMemoryFileSystem implements FileSystem {
                 FSPointer buffer = createFSPointer(result.getContent());
                 file.write(buffer, result.getContent().length, 0);
                 logger.debug(
-                    "Loaded file content from {} cache: {} ({} bytes)",
-                    result.getHitLevel().name(),
-                    filePath,
-                    result.getContent().length
-                );
+                        "Loaded file content from {} cache: {} ({} bytes)",
+                        result.getHitLevel().name(),
+                        filePath,
+                        result.getContent().length);
                 return;
             } catch (Exception e) {
                 logger.warn(
-                    "Failed to write cached content to file: {}",
-                    filePath,
-                    e
-                );
+                        "Failed to write cached content to file: {}",
+                        filePath,
+                        e);
             }
         }
 
@@ -507,34 +699,29 @@ public class InMemoryFileSystem implements FileSystem {
     private void loadFileContentFromBlockchain(BlockchainFile file) {
         try {
             String rholangQuery = RholangExpressionConstructor.readFromChannel(
-                file.getAbsolutePath()
-            );
+                    file.getAbsolutePath());
 
-            CompletableFuture<RhoTypes.Expr> future =
-                CompletableFuture.supplyAsync(() -> {
-                    try {
-                        return blockchainClient.exploratoryDeploy(rholangQuery);
-                    } catch (F1r3DriveError e) {
-                        throw new RuntimeException(
+            CompletableFuture<RhoTypes.Expr> future = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return blockchainClient.exploratoryDeploy(rholangQuery);
+                } catch (F1r3DriveError e) {
+                    throw new RuntimeException(
                             "Failed to fetch file from blockchain",
-                            e
-                        );
-                    }
-                });
+                            e);
+                }
+            });
 
             RhoTypes.Expr result = future.get(30, TimeUnit.SECONDS);
 
             if (result != null && result.hasGByteArray()) {
-                byte[] content =
-                    RholangExpressionConstructor.parseExploratoryDeployBytes(
-                        result
-                    );
+                byte[] content = RholangExpressionConstructor.parseExploratoryDeployBytes(
+                        result);
                 if (content.length > 0) {
                     // Cache content using Caffeine (simplified without metadata)
                     cacheStrategy.put(
-                        file.getAbsolutePath(),
-                        content,
-                        null // No metadata for now
+                            file.getAbsolutePath(),
+                            content,
+                            null // No metadata for now
                     );
 
                     // Write content to file
@@ -542,23 +729,21 @@ public class InMemoryFileSystem implements FileSystem {
                     FSPointer buffer = createFSPointer(content);
                     file.write(buffer, content.length, 0);
                     logger.debug(
-                        "Loaded and cached file content from blockchain: {} ({} bytes)",
-                        file.getAbsolutePath(),
-                        content.length
-                    );
+                            "Loaded and cached file content from blockchain: {} ({} bytes)",
+                            file.getAbsolutePath(),
+                            content.length);
                 }
             }
         } catch (Exception e) {
             logger.error(
-                "Failed to load file content from blockchain: {}",
-                e.getMessage(),
-                e
-            );
+                    "Failed to load file content from blockchain: {}",
+                    e.getMessage(),
+                    e);
         }
     }
 
     public void readDirectory(String path, FSFillDir filter)
-        throws PathNotFound, PathIsNotADirectory {
+            throws PathNotFound, PathIsNotADirectory {
         Directory directory = getDirectoryByPath(path);
         directory.read(filter);
     }
@@ -587,7 +772,7 @@ public class InMemoryFileSystem implements FileSystem {
      * Renames/moves a file with blockchain persistence.
      */
     public void renameFile(String path, String newName)
-        throws PathNotFound, OperationNotPermitted {
+            throws PathNotFound, OperationNotPermitted {
         Path p = getPath(path);
         Directory newParent = getParentDirectoryInternal(newName);
         Directory oldParent = p.getParent();
@@ -607,10 +792,34 @@ public class InMemoryFileSystem implements FileSystem {
             ((BlockchainFile) p).onChange();
             logger.debug("Blockchain file renamed: {} -> {}", path, newName);
         }
+
+        // Sync with FileProvider if available
+        if (fileProviderIntegration != null &&
+                fileProviderIntegration.isInitialized()) {
+            // Remove old placeholder
+            fileProviderIntegration.removePlaceholder(path);
+
+            // Create new placeholder at new location
+            if (p instanceof BlockchainFile) {
+                BlockchainFile file = (BlockchainFile) p;
+                fileProviderIntegration.createPlaceholder(
+                        newName,
+                        file.getSize(),
+                        file.getLastUpdated(),
+                        false);
+            } else if (p instanceof Directory) {
+                fileProviderIntegration.createPlaceholder(
+                        newName,
+                        0,
+                        System.currentTimeMillis(),
+                        true);
+            }
+            logger.debug("Updated FileProvider placeholders for rename: {} -> {}", path, newName);
+        }
     }
 
     public void removeDirectory(String path)
-        throws PathNotFound, PathIsNotADirectory, DirectoryNotEmpty, OperationNotPermitted {
+            throws PathNotFound, PathIsNotADirectory, DirectoryNotEmpty, OperationNotPermitted {
         Directory directory = getDirectoryByPath(path);
         if (!directory.isEmpty()) {
             throw new DirectoryNotEmpty(path);
@@ -618,24 +827,20 @@ public class InMemoryFileSystem implements FileSystem {
 
         // Remove from blockchain if it's a blockchain directory
         if (directory instanceof UnlockedWalletDirectory) {
-            UnlockedWalletDirectory blockchainDir =
-                (UnlockedWalletDirectory) directory;
+            UnlockedWalletDirectory blockchainDir = (UnlockedWalletDirectory) directory;
             // Queue blockchain removal operation
             String rholang = RholangExpressionConstructor.forgetChanel(
-                directory.getAbsolutePath()
-            );
+                    directory.getAbsolutePath());
             // Queue deployment via dispatcher
             try {
                 deployDispatcher.enqueueDeploy(
-                    new io.f1r3fly.f1r3drive.blockchain.client.DeployDispatcher.Deployment(
-                        rholang,
-                        false,
-                        "rholang",
-                        null, // rev address not needed for deletion
-                        null, // signing key not needed for deletion
-                        System.currentTimeMillis()
-                    )
-                );
+                        new io.f1r3fly.f1r3drive.blockchain.client.DeployDispatcher.Deployment(
+                                rholang,
+                                false,
+                                "rholang",
+                                null, // rev address not needed for deletion
+                                null, // signing key not needed for deletion
+                                System.currentTimeMillis()));
             } catch (Exception e) {
                 logger.warn("Failed to queue directory removal deployment", e);
             }
@@ -647,10 +852,17 @@ public class InMemoryFileSystem implements FileSystem {
         if (parent != null) {
             parent.deleteChild(directory);
         }
+
+        // Sync with FileProvider if available
+        if (fileProviderIntegration != null &&
+                fileProviderIntegration.isInitialized()) {
+            fileProviderIntegration.removePlaceholder(path);
+            logger.debug("Removed FileProvider placeholder for directory: {}", path);
+        }
     }
 
     public void truncateFile(String path, long offset)
-        throws PathNotFound, PathIsNotAFile, IOException {
+            throws PathNotFound, PathIsNotAFile, IOException {
         File file = getFileByPath(path);
         file.truncate(offset);
 
@@ -659,10 +871,22 @@ public class InMemoryFileSystem implements FileSystem {
             ((BlockchainFile) file).onChange();
             logger.debug("Blockchain file truncated: {}", path);
         }
+
+        // Sync with FileProvider if available
+        if (fileProviderIntegration != null &&
+                fileProviderIntegration.isInitialized() &&
+                file instanceof BlockchainFile) {
+            BlockchainFile blockchainFile = (BlockchainFile) file;
+            fileProviderIntegration.updatePlaceholder(
+                    path,
+                    blockchainFile.getSize(),
+                    blockchainFile.getLastUpdated());
+            logger.debug("Updated FileProvider placeholder after truncate: {}", path);
+        }
     }
 
     public void unlinkFile(String path)
-        throws PathNotFound, OperationNotPermitted {
+            throws PathNotFound, OperationNotPermitted {
         Path p = getPath(path);
 
         // Remove from blockchain if it's a blockchain file
@@ -671,26 +895,23 @@ public class InMemoryFileSystem implements FileSystem {
 
             // Record operation cost
             String walletAddress = blockchainFile
-                .getBlockchainContext()
-                .getWalletInfo()
-                .revAddress();
+                    .getBlockchainContext()
+                    .getWalletInfo()
+                    .revAddress();
             TokenDirectory.recordOperationCost(walletAddress, "DELETE_FILE");
 
             String rholang = RholangExpressionConstructor.forgetChanel(
-                p.getAbsolutePath()
-            );
+                    p.getAbsolutePath());
             // Queue deployment via dispatcher
             try {
                 deployDispatcher.enqueueDeploy(
-                    new io.f1r3fly.f1r3drive.blockchain.client.DeployDispatcher.Deployment(
-                        rholang,
-                        false,
-                        "rholang",
-                        null, // rev address not needed for deletion
-                        null, // signing key not needed for deletion
-                        System.currentTimeMillis()
-                    )
-                );
+                        new io.f1r3fly.f1r3drive.blockchain.client.DeployDispatcher.Deployment(
+                                rholang,
+                                false,
+                                "rholang",
+                                null, // rev address not needed for deletion
+                                null, // signing key not needed for deletion
+                                System.currentTimeMillis()));
             } catch (Exception e) {
                 logger.warn("Failed to queue file removal deployment", e);
             }
@@ -702,10 +923,17 @@ public class InMemoryFileSystem implements FileSystem {
         if (parent != null) {
             parent.deleteChild(p);
         }
+
+        // Sync with FileProvider if available
+        if (fileProviderIntegration != null &&
+                fileProviderIntegration.isInitialized()) {
+            fileProviderIntegration.removePlaceholder(path);
+            logger.debug("Removed FileProvider placeholder for: {}", path);
+        }
     }
 
     public void openFile(String path)
-        throws PathNotFound, PathIsNotAFile, IOException {
+            throws PathNotFound, PathIsNotAFile, IOException {
         File file = getFileByPath(path);
         file.open();
 
@@ -720,16 +948,16 @@ public class InMemoryFileSystem implements FileSystem {
      * For .rho and .metta files, triggers blockchain deployment.
      */
     public int writeFile(String path, FSPointer buf, long size, long offset)
-        throws PathNotFound, PathIsNotAFile, IOException {
+            throws PathNotFound, PathIsNotAFile, IOException {
         File file = getFileByPath(path);
 
         // Record operation cost
         if (file instanceof BlockchainFile) {
             BlockchainFile blockchainFile = (BlockchainFile) file;
             String walletAddress = blockchainFile
-                .getBlockchainContext()
-                .getWalletInfo()
-                .revAddress();
+                    .getBlockchainContext()
+                    .getWalletInfo()
+                    .revAddress();
             TokenDirectory.recordOperationCost(walletAddress, "WRITE_FILE");
         }
 
@@ -749,11 +977,20 @@ public class InMemoryFileSystem implements FileSystem {
             // Invalidate cache since file content changed
             cacheStrategy.invalidate(path);
 
+            // Sync with FileProvider if available
+            if (fileProviderIntegration != null &&
+                    fileProviderIntegration.isInitialized()) {
+                fileProviderIntegration.updatePlaceholder(
+                        path,
+                        blockchainFile.getSize(),
+                        blockchainFile.getLastUpdated());
+                logger.debug("Updated FileProvider placeholder for: {}", path);
+            }
+
             logger.debug(
-                "Blockchain file modified: {} ({} bytes written)",
-                path,
-                bytesWritten
-            );
+                    "Blockchain file modified: {} ({} bytes written)",
+                    path,
+                    bytesWritten);
         }
 
         return bytesWritten;
@@ -766,10 +1003,10 @@ public class InMemoryFileSystem implements FileSystem {
         try {
             String fileName = file.getName().toLowerCase();
             String language = fileName.endsWith(".rho")
-                ? F1r3flyBlockchainClient.RHOLANG
-                : fileName.endsWith(".metta")
-                    ? F1r3flyBlockchainClient.METTA_LANGUAGE
-                    : null;
+                    ? F1r3flyBlockchainClient.RHOLANG
+                    : fileName.endsWith(".metta")
+                            ? F1r3flyBlockchainClient.METTA_LANGUAGE
+                            : null;
 
             if (language != null) {
                 // Read file content
@@ -779,47 +1016,42 @@ public class InMemoryFileSystem implements FileSystem {
                 CompletableFuture.runAsync(() -> {
                     try {
                         RevWalletInfo walletInfo = file
-                            .getBlockchainContext()
-                            .getWalletInfo();
+                                .getBlockchainContext()
+                                .getWalletInfo();
                         // Use dummy signing key for now - real implementation would get from wallet
                         byte[] signingKey = null;
                         long timestamp = System.currentTimeMillis();
 
                         // Record operation cost for deployment
                         TokenDirectory.recordOperationCost(
-                            walletInfo.revAddress(),
-                            "DEPLOY_CONTRACT"
-                        );
+                                walletInfo.revAddress(),
+                                "DEPLOY_CONTRACT");
 
                         blockchainClient.deploy(
-                            content,
-                            false,
-                            language,
-                            signingKey,
-                            timestamp
-                        );
+                                content,
+                                false,
+                                language,
+                                signingKey,
+                                timestamp);
 
                         logger.info(
-                            "Successfully deployed {} file to blockchain: {}",
-                            language,
-                            file.getAbsolutePath()
-                        );
+                                "Successfully deployed {} file to blockchain: {}",
+                                language,
+                                file.getAbsolutePath());
                     } catch (Exception e) {
                         logger.error(
-                            "Failed to deploy {} file to blockchain: {}",
-                            language,
-                            file.getAbsolutePath(),
-                            e
-                        );
+                                "Failed to deploy {} file to blockchain: {}",
+                                language,
+                                file.getAbsolutePath(),
+                                e);
                     }
                 });
             }
         } catch (Exception e) {
             logger.error(
-                "Failed to trigger automatic deployment: {}",
-                e.getMessage(),
-                e
-            );
+                    "Failed to trigger automatic deployment: {}",
+                    e.getMessage(),
+                    e);
         }
     }
 
@@ -827,7 +1059,7 @@ public class InMemoryFileSystem implements FileSystem {
      * Reads file content as string for deployment.
      */
     private String readFileContentAsString(BlockchainFile file)
-        throws IOException {
+            throws IOException {
         file.open();
         long fileSize = file.getSize();
         if (fileSize > Integer.MAX_VALUE) {
@@ -883,8 +1115,8 @@ public class InMemoryFileSystem implements FileSystem {
 
         int lastSeparatorIndex = path.lastIndexOf(pathSeparator());
         return lastSeparatorIndex <= 0
-            ? pathSeparator()
-            : path.substring(0, lastSeparatorIndex);
+                ? pathSeparator()
+                : path.substring(0, lastSeparatorIndex);
     }
 
     /**
@@ -892,26 +1124,18 @@ public class InMemoryFileSystem implements FileSystem {
      * This uses real blockchain data, not mock data.
      */
     private List<String> parseRavAddressesFromGenesisBlock(
-        F1r3flyBlockchainClient f1R3FlyBlockchainClient
-    ) throws F1r3DriveError {
+            F1r3flyBlockchainClient f1R3FlyBlockchainClient) throws F1r3DriveError {
         logger.debug("Parsing REV addresses from genesis block");
 
-        DeployServiceCommon.BlockInfo genesisBlock =
-            f1R3FlyBlockchainClient.getGenesisBlock();
-        List<DeployServiceCommon.DeployInfo> deploys =
-            genesisBlock.getDeploysList();
+        DeployServiceCommon.BlockInfo genesisBlock = f1R3FlyBlockchainClient.getGenesisBlock();
+        List<DeployServiceCommon.DeployInfo> deploys = genesisBlock.getDeploysList();
 
         DeployServiceCommon.DeployInfo tokenInitializeDeploy = deploys
-            .stream()
-            .filter(deployInfo ->
-                deployInfo.getTerm().contains("revVaultInitCh")
-            )
-            .findFirst()
-            .orElseThrow(() ->
-                new F1r3DriveError(
-                    "Token initialize deploy not found in genesis block"
-                )
-            );
+                .stream()
+                .filter(deployInfo -> deployInfo.getTerm().contains("revVaultInitCh"))
+                .findFirst()
+                .orElseThrow(() -> new F1r3DriveError(
+                        "Token initialize deploy not found in genesis block"));
 
         String regex = "\\\"(1111[A-Za-z0-9]+)\\\"";
         Pattern pattern = Pattern.compile(regex);
@@ -923,9 +1147,8 @@ public class InMemoryFileSystem implements FileSystem {
         }
 
         logger.info(
-            "Found {} REV addresses in genesis block",
-            ravAddresses.size()
-        );
+                "Found {} REV addresses in genesis block",
+                ravAddresses.size());
         return ravAddresses;
     }
 
@@ -933,34 +1156,29 @@ public class InMemoryFileSystem implements FileSystem {
      * Creates wallet directories from blockchain data.
      */
     private Set<Path> createRavAddressDirectoriesFromBlockchain()
-        throws F1r3DriveError {
+            throws F1r3DriveError {
         List<String> ravAddresses = parseRavAddressesFromGenesisBlock(
-            blockchainClient
-        );
+                blockchainClient);
 
         logger.debug(
-            "Creating wallet directories for addresses: {}",
-            ravAddresses
-        );
+                "Creating wallet directories for addresses: {}",
+                ravAddresses);
 
         Set<Path> children = new HashSet<>();
 
         for (String address : ravAddresses) {
             BlockchainContext context = new BlockchainContext(
-                new RevWalletInfo(address, null),
-                deployDispatcher
-            );
+                    new RevWalletInfo(address, null),
+                    deployDispatcher);
 
             LockedWalletDirectory lockedDir = new LockedWalletDirectory(
-                context,
-                rootDirectory
-            );
+                    context,
+                    rootDirectory);
             children.add(lockedDir);
 
             logger.debug(
-                "Created locked wallet directory for address: {}",
-                address
-            );
+                    "Created locked wallet directory for address: {}",
+                    address);
         }
 
         return children;
@@ -971,134 +1189,111 @@ public class InMemoryFileSystem implements FileSystem {
      * This performs actual cryptographic validation and blockchain operations.
      */
     public void unlockRootDirectory(String revAddress, String privateKey)
-        throws InvalidSigningKeyException {
+            throws InvalidSigningKeyException {
         String searchPath = "/LOCKED-REMOTE-REV-" + revAddress;
 
         logger.info(
-            "WALLET_UNLOCK_START: Attempting to unlock wallet directory for address: {}",
-            revAddress
-        );
+                "WALLET_UNLOCK_START: Attempting to unlock wallet directory for address: {}",
+                revAddress);
 
         try {
             Path lockedRoot = getDirectory(searchPath);
             if (lockedRoot == null) {
                 // Create locked wallet directory if it doesn't exist
                 logger.info(
-                    "WALLET_CREATE: Locked wallet directory not found, creating: {}",
-                    searchPath
-                );
+                        "WALLET_CREATE: Locked wallet directory not found, creating: {}",
+                        searchPath);
                 BlockchainContext context = new BlockchainContext(
-                    new RevWalletInfo(revAddress, null),
-                    deployDispatcher
-                );
+                        new RevWalletInfo(revAddress, null),
+                        deployDispatcher);
                 lockedRoot = new LockedWalletDirectory(context, rootDirectory);
                 rootDirectory.addChild(lockedRoot);
                 logger.info(
-                    "WALLET_CREATED: Successfully created locked wallet directory: {}",
-                    searchPath
-                );
+                        "WALLET_CREATED: Successfully created locked wallet directory: {}",
+                        searchPath);
             } else {
                 logger.info(
-                    "WALLET_FOUND: Found existing locked wallet directory: {}",
-                    searchPath
-                );
+                        "WALLET_FOUND: Found existing locked wallet directory: {}",
+                        searchPath);
             }
 
             if (lockedRoot instanceof LockedWalletDirectory) {
-                LockedWalletDirectory lockedWalletDir =
-                    (LockedWalletDirectory) lockedRoot;
+                LockedWalletDirectory lockedWalletDir = (LockedWalletDirectory) lockedRoot;
 
                 logger.info(
-                    "WALLET_UNLOCK_CRYPTO: Starting cryptographic unlock validation for: {}",
-                    revAddress
-                );
+                        "WALLET_UNLOCK_CRYPTO: Starting cryptographic unlock validation for: {}",
+                        revAddress);
 
                 // Perform real cryptographic unlock with blockchain validation
                 UnlockedWalletDirectory unlockedRoot = lockedWalletDir.unlock(
-                    privateKey,
-                    deployDispatcher
-                );
+                        privateKey,
+                        deployDispatcher);
 
                 logger.info(
-                    "WALLET_FILESYSTEM_UPDATE: Replacing locked with unlocked directory for: {}",
-                    revAddress
-                );
+                        "WALLET_FILESYSTEM_UPDATE: Replacing locked with unlocked directory for: {}",
+                        revAddress);
                 this.rootDirectory.deleteChild(lockedRoot);
                 this.rootDirectory.addChild(unlockedRoot);
 
                 // Also unlock the physical wallet for file system operations
                 // Physical wallet operations are now handled by FolderTokenManager
                 logger.info(
-                    "WALLET_UNLOCKED: Successfully unlocked wallet in file system: {}",
-                    revAddress
-                );
+                        "WALLET_UNLOCKED: Successfully unlocked wallet in file system: {}",
+                        revAddress);
 
                 // Set up real token balance monitoring
-                TokenDirectory tokenDirectory =
-                    unlockedRoot.getTokenDirectory();
+                TokenDirectory tokenDirectory = unlockedRoot.getTokenDirectory();
                 if (tokenDirectory != null) {
                     logger.info(
-                        "WALLET_TOKEN_SETUP: Setting up token directory monitoring for: {}",
-                        revAddress
-                    );
+                            "WALLET_TOKEN_SETUP: Setting up token directory monitoring for: {}",
+                            revAddress);
                     stateChangeEventsManager.registerEventProcessor(
-                        StateChangeEvents.WalletBalanceChanged.class,
-                        new StateChangeEventProcessor() {
-                            @Override
-                            public void processEvent(StateChangeEvents event) {
-                                if (
-                                    event instanceof
-                                        StateChangeEvents.WalletBalanceChanged balanceChanged
-                                ) {
-                                    if (
-                                        balanceChanged
-                                            .revAddress()
-                                            .equals(
-                                                unlockedRoot
-                                                    .getBlockchainContext()
-                                                    .getWalletInfo()
-                                                    .revAddress()
-                                            )
-                                    ) {
-                                        // Update token directory with real balance from blockchain
-                                        tokenDirectory.handleWalletBalanceChanged();
+                            StateChangeEvents.WalletBalanceChanged.class,
+                            new StateChangeEventProcessor() {
+                                @Override
+                                public void processEvent(StateChangeEvents event) {
+                                    if (event instanceof StateChangeEvents.WalletBalanceChanged balanceChanged) {
+                                        if (balanceChanged
+                                                .revAddress()
+                                                .equals(
+                                                        unlockedRoot
+                                                                .getBlockchainContext()
+                                                                .getWalletInfo()
+                                                                .revAddress())) {
+                                            // Update token directory with real balance from blockchain
+                                            tokenDirectory.handleWalletBalanceChanged();
+                                        }
                                     }
                                 }
-                            }
-                        }
-                    );
+                            });
 
                     // Initial balance fetch from blockchain
                     fetchInitialWalletBalance(unlockedRoot);
 
                     logger.info(
-                        "Successfully unlocked wallet directory: {}",
-                        revAddress
-                    );
+                            "Successfully unlocked wallet directory: {}",
+                            revAddress);
                 } else {
                     logger.warn(
-                        "Token directory is null for unlocked wallet: {}",
-                        revAddress
-                    );
+                            "Token directory is null for unlocked wallet: {}",
+                            revAddress);
                 }
             } else {
                 String errorMsg = lockedRoot != null
-                    ? "Expected LockedWalletDirectory but got: " +
-                      lockedRoot.getClass().getSimpleName()
-                    : "Wallet directory not found: " + searchPath;
+                        ? "Expected LockedWalletDirectory but got: " +
+                                lockedRoot.getClass().getSimpleName()
+                        : "Wallet directory not found: " + searchPath;
 
                 logger.error(errorMsg);
                 throw new PathNotFound(searchPath);
             }
         } catch (Exception e) {
             logger.error(
-                "Failed to unlock wallet directory: {}",
-                revAddress,
-                e
-            );
+                    "Failed to unlock wallet directory: {}",
+                    revAddress,
+                    e);
             throw new InvalidSigningKeyException(
-                "Failed to unlock wallet: " + e.getMessage()
-            );
+                    "Failed to unlock wallet: " + e.getMessage());
         }
     }
 
@@ -1106,20 +1301,17 @@ public class InMemoryFileSystem implements FileSystem {
      * Fetches initial wallet balance from blockchain.
      */
     private void fetchInitialWalletBalance(
-        UnlockedWalletDirectory unlockedWallet
-    ) {
+            UnlockedWalletDirectory unlockedWallet) {
         CompletableFuture.runAsync(() -> {
             try {
                 String revAddress = unlockedWallet
-                    .getBlockchainContext()
-                    .getWalletInfo()
-                    .revAddress();
-                String balanceQuery =
-                    RholangExpressionConstructor.checkBalanceRho(revAddress);
+                        .getBlockchainContext()
+                        .getWalletInfo()
+                        .revAddress();
+                String balanceQuery = RholangExpressionConstructor.checkBalanceRho(revAddress);
 
                 RhoTypes.Expr result = blockchainClient.exploratoryDeploy(
-                    balanceQuery
-                );
+                        balanceQuery);
 
                 if (result != null && result.hasGInt()) {
                     long balance = result.getGInt();
@@ -1129,10 +1321,9 @@ public class InMemoryFileSystem implements FileSystem {
                     stateChangeEventsManager.notifyExternalChange();
 
                     logger.info(
-                        "Fetched initial wallet balance: {} REV for {}",
-                        balance,
-                        revAddress
-                    );
+                            "Fetched initial wallet balance: {} REV for {}",
+                            balance,
+                            revAddress);
                 }
             } catch (Exception e) {
                 logger.error("Failed to fetch initial wallet balance", e);
@@ -1163,8 +1354,7 @@ public class InMemoryFileSystem implements FileSystem {
 
         if (!(tokenDirectory instanceof TokenDirectory)) {
             throw new RuntimeException(
-                "Token directory is not a token directory: " + filePath
-            );
+                    "Token directory is not a token directory: " + filePath);
         }
 
         // Perform real blockchain token operation
@@ -1180,8 +1370,7 @@ public class InMemoryFileSystem implements FileSystem {
     @Override
     public void waitOnBackgroundDeploy() {
         logger.debug(
-            "Waiting for background blockchain deployments to complete"
-        );
+                "Waiting for background blockchain deployments to complete");
         deployDispatcher.waitOnEmptyQueue();
         logger.debug("All background blockchain deployments completed");
     }
@@ -1195,21 +1384,18 @@ public class InMemoryFileSystem implements FileSystem {
 
         try {
             logger.debug(
-                "Waiting for background blockchain deployments to complete..."
-            );
+                    "Waiting for background blockchain deployments to complete...");
             waitOnBackgroundDeploy();
             logger.debug("Background blockchain deployments completed");
         } catch (Throwable e) {
             logger.warn(
-                "Error waiting for background deployments to complete",
-                e
-            );
+                    "Error waiting for background deployments to complete",
+                    e);
         }
 
         try {
             logger.debug(
-                "Physical wallet management handled by FolderTokenManager"
-            );
+                    "Physical wallet management handled by FolderTokenManager");
         } catch (Throwable e) {
             logger.warn("Error shutting down physical wallet manager", e);
         }
@@ -1240,8 +1426,7 @@ public class InMemoryFileSystem implements FileSystem {
 
         try {
             logger.debug(
-                "Cleaning up Caffeine cache and PlaceholderManager..."
-            );
+                    "Cleaning up Caffeine cache and PlaceholderManager...");
             this.placeholderManager.cleanup();
             this.cacheStrategy.performMaintenance();
             logger.info("Cache cleanup completed");
@@ -1250,12 +1435,12 @@ public class InMemoryFileSystem implements FileSystem {
         }
 
         logger.info(
-            "Filesystem termination completed - all blockchain connections closed"
-        );
+                "Filesystem termination completed - all blockchain connections closed");
     }
 
     /**
-     * Physical wallet manager has been removed - functionality moved to FolderTokenManager
+     * Physical wallet manager has been removed - functionality moved to
+     * FolderTokenManager
      */
 
     public RootDirectory getRootDirectory() {
@@ -1266,15 +1451,13 @@ public class InMemoryFileSystem implements FileSystem {
      * Validates that a wallet operation can be performed on a physical wallet
      */
     public void validatePhysicalWalletOperation(
-        String walletAddress,
-        String operationType
-    ) throws IllegalStateException {
+            String walletAddress,
+            String operationType) throws IllegalStateException {
         // Physical wallet validation now handled by FolderTokenManager
         logger.debug(
-            "Wallet operation validation for {}: {}",
-            walletAddress,
-            operationType
-        );
+                "Wallet operation validation for {}: {}",
+                walletAddress,
+                operationType);
     }
 
     /**

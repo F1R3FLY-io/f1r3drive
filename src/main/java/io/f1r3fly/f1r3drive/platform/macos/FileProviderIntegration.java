@@ -1,6 +1,9 @@
 package io.f1r3fly.f1r3drive.platform.macos;
 
 import io.f1r3fly.f1r3drive.filesystem.InMemoryFileSystem;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.io.IOException;
 import io.f1r3fly.f1r3drive.platform.FileChangeCallback;
 import java.util.HashSet;
 import java.util.Map;
@@ -16,7 +19,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Integration with macOS File Provider Framework.
- * Creates virtual filesystem in Finder, supports placeholder files for lazy loading,
+ * Creates virtual filesystem in Finder, supports placeholder files for lazy
+ * loading,
  * and provides seamless integration with macOS applications.
  *
  * This class bridges F1r3Drive with macOS File Provider Framework to create
@@ -26,8 +30,7 @@ import org.slf4j.LoggerFactory;
 public class FileProviderIntegration {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(
-        FileProviderIntegration.class
-    );
+            FileProviderIntegration.class);
 
     // Native library loading
     static {
@@ -36,13 +39,11 @@ public class FileProviderIntegration {
             LOGGER.info("Successfully loaded native File Provider library");
         } catch (UnsatisfiedLinkError e) {
             LOGGER.warn(
-                "Failed to load native File Provider library: {}. File Provider integration will be disabled.",
-                e.getMessage()
-            );
+                    "Failed to load native File Provider library: {}. File Provider integration will be disabled.",
+                    e.getMessage());
             LOGGER.warn(
-                "Platform info: {}",
-                NativeLibraryLoader.getPlatformInfo()
-            );
+                    "Platform info: {}",
+                    NativeLibraryLoader.getPlatformInfo());
         }
     }
 
@@ -64,8 +65,7 @@ public class FileProviderIntegration {
     private long nativeProviderRef = 0; // Native NSFileProviderExtension reference
 
     // Placeholder and materialization tracking
-    private final Map<String, PlaceholderInfo> placeholders =
-        new ConcurrentHashMap<>();
+    private final Map<String, PlaceholderInfo> placeholders = new ConcurrentHashMap<>();
     private final Set<String> materializingFiles = new HashSet<>();
 
     // Fixed thread pool for materialization operations to prevent OutOfMemoryError
@@ -75,8 +75,7 @@ public class FileProviderIntegration {
     private String domainIdentifier;
     private String displayName = "F1r3Drive";
     private String rootPath;
-    private int defaultMaterializationPolicy =
-        NSFileProviderMaterializationPolicyOnDemand;
+    private int defaultMaterializationPolicy = NSFileProviderMaterializationPolicyOnDemand;
 
     /**
      * Information about a placeholder file.
@@ -91,12 +90,11 @@ public class FileProviderIntegration {
         volatile boolean isMaterialized;
 
         PlaceholderInfo(
-            String path,
-            long size,
-            long lastModified,
-            boolean isDirectory,
-            int materializationPolicy
-        ) {
+                String path,
+                long size,
+                long lastModified,
+                boolean isDirectory,
+                int materializationPolicy) {
             this.path = path;
             this.size = size;
             this.lastModified = lastModified;
@@ -111,31 +109,27 @@ public class FileProviderIntegration {
      */
     public FileProviderIntegration() {
         // Generate unique domain identifier
-        this.domainIdentifier =
-            "io.f1r3fly.f1r3drive.domain." + System.currentTimeMillis();
+        this.domainIdentifier = "io.f1r3fly.f1r3drive.domain." + System.currentTimeMillis();
         LOGGER.debug(
-            "FileProviderIntegration created with domain: {}",
-            domainIdentifier
-        );
+                "FileProviderIntegration created with domain: {}",
+                domainIdentifier);
     }
 
     /**
      * Creates a FileProviderIntegration with custom configuration.
      *
      * @param domainIdentifier custom domain identifier
-     * @param displayName display name for the File Provider
+     * @param displayName      display name for the File Provider
      */
     public FileProviderIntegration(
-        String domainIdentifier,
-        String displayName
-    ) {
+            String domainIdentifier,
+            String displayName) {
         this.domainIdentifier = domainIdentifier;
         this.displayName = displayName;
         LOGGER.debug(
-            "FileProviderIntegration created with domain: {}, display name: {}",
-            domainIdentifier,
-            displayName
-        );
+                "FileProviderIntegration created with domain: {}, display name: {}",
+                domainIdentifier,
+                displayName);
     }
 
     /**
@@ -147,57 +141,49 @@ public class FileProviderIntegration {
     public synchronized void initialize(String rootPath) throws Exception {
         if (isInitialized.get()) {
             throw new IllegalStateException(
-                "FileProviderIntegration is already initialized"
-            );
+                    "FileProviderIntegration is already initialized");
         }
 
         if (isShutdown.get()) {
             throw new IllegalStateException(
-                "FileProviderIntegration has been shut down"
-            );
+                    "FileProviderIntegration has been shut down");
         }
 
         if (!isNativeLibraryAvailable()) {
             throw new Exception(
-                "Native File Provider library is not available"
-            );
+                    "Native File Provider library is not available");
         }
 
         this.rootPath = rootPath;
 
         LOGGER.info(
-            "Initializing File Provider integration for path: {}",
-            rootPath
-        );
+                "Initializing File Provider integration for path: {}",
+                rootPath);
 
         try {
             // Create native File Provider extension
             nativeProviderRef = nativeCreateProvider(
-                domainIdentifier,
-                displayName,
-                rootPath
-            );
+                    domainIdentifier,
+                    displayName,
+                    rootPath);
 
             if (nativeProviderRef == 0) {
                 throw new Exception(
-                    "Failed to create native File Provider extension"
-                );
+                        "Failed to create native File Provider extension");
             }
 
             // Register the domain with the system
             if (!nativeRegisterDomain(nativeProviderRef)) {
                 throw new Exception(
-                    "Failed to register File Provider domain with system"
-                );
+                        "Failed to register File Provider domain with system");
             }
 
             // Initialize fixed thread pool for materialization operations
             // This prevents OutOfMemoryError from unbounded thread creation
             materializationExecutor = Executors.newFixedThreadPool(8, r -> {
                 Thread thread = new Thread(
-                    r,
-                    "FileProvider-Materialize-" + System.currentTimeMillis()
-                );
+                        r,
+                        "FileProvider-Materialize-" + System.currentTimeMillis());
                 thread.setDaemon(true);
                 return thread;
             });
@@ -207,10 +193,9 @@ public class FileProviderIntegration {
         } catch (Exception e) {
             cleanup();
             throw new Exception(
-                "Failed to initialize File Provider integration: " +
-                    e.getMessage(),
-                e
-            );
+                    "Failed to initialize File Provider integration: " +
+                            e.getMessage(),
+                    e);
         }
     }
 
@@ -241,77 +226,107 @@ public class FileProviderIntegration {
     }
 
     /**
+     * Resolves a relative path to an absolute path within the root directory.
+     * 
+     * @param relativePath the relative path (e.g., "/my/file.txt" or "my/file.txt")
+     * @return the absolute path on the filesystem
+     */
+    private String resolvePath(String relativePath) {
+        if (rootPath == null) {
+            return relativePath;
+        }
+        // Remove leading slash if present to avoid treating it as absolute path
+        String cleanPath = relativePath.startsWith("/")
+                ? relativePath.substring(1)
+                : relativePath;
+        return new java.io.File(rootPath, cleanPath).getAbsolutePath();
+    }
+
+    /**
      * Creates a placeholder file in the File Provider domain.
      *
      * @param relativePath relative path within the domain
-     * @param size file size in bytes
+     * @param size         file size in bytes
      * @param lastModified last modification timestamp
-     * @param isDirectory true if this is a directory placeholder
+     * @param isDirectory  true if this is a directory placeholder
      * @return true if placeholder was created successfully
      */
     public boolean createPlaceholder(
-        String relativePath,
-        long size,
-        long lastModified,
-        boolean isDirectory
-    ) {
+            String relativePath,
+            long size,
+            long lastModified,
+            boolean isDirectory) {
         lock.writeLock().lock();
         try {
             if (!isInitialized.get()) {
                 LOGGER.error(
-                    "Cannot create placeholder: File Provider not initialized"
-                );
+                        "Cannot create placeholder: File Provider not initialized");
                 return false;
             }
 
             LOGGER.debug(
-                "Creating placeholder: path={}, size={}, isDir={}",
-                relativePath,
-                size,
-                isDirectory
-            );
+                    "Creating placeholder: path={}, size={}, isDir={}",
+                    relativePath,
+                    size,
+                    isDirectory);
 
             int itemType = isDirectory
-                ? NSFileProviderItemTypeFolder
-                : NSFileProviderItemTypeData;
+                    ? NSFileProviderItemTypeFolder
+                    : NSFileProviderItemTypeData;
 
-            if (
-                nativeCreatePlaceholder(
+            String fullPath = resolvePath(relativePath);
+
+            if (isDirectory) {
+                try {
+                    Files.createDirectories(Paths.get(fullPath));
+                    PlaceholderInfo info = new PlaceholderInfo(
+                            relativePath,
+                            size,
+                            lastModified,
+                            isDirectory,
+                            defaultMaterializationPolicy);
+                    placeholders.put(relativePath, info);
+
+                    LOGGER.debug(
+                            "Directory placeholder created successfully: {}",
+                            relativePath);
+                    return true;
+                } catch (IOException e) {
+                    LOGGER.error("Failed to create directory: {}", fullPath, e);
+                    return false;
+                }
+            }
+
+            if (nativeCreatePlaceholder(
                     nativeProviderRef,
-                    relativePath,
+                    fullPath,
                     size,
                     lastModified,
                     itemType,
-                    defaultMaterializationPolicy
-                )
-            ) {
+                    defaultMaterializationPolicy)) {
                 PlaceholderInfo info = new PlaceholderInfo(
-                    relativePath,
-                    size,
-                    lastModified,
-                    isDirectory,
-                    defaultMaterializationPolicy
-                );
+                        relativePath,
+                        size,
+                        lastModified,
+                        isDirectory,
+                        defaultMaterializationPolicy);
                 placeholders.put(relativePath, info);
 
                 LOGGER.debug(
-                    "Placeholder created successfully: {}",
-                    relativePath
-                );
+                        "Placeholder created successfully: {}",
+                        relativePath);
                 return true;
             } else {
                 LOGGER.error(
-                    "Failed to create native placeholder for: {}",
-                    relativePath
-                );
+                        "Failed to create native placeholder for: {}",
+                        relativePath);
                 return false;
             }
         } catch (Exception e) {
             LOGGER.error(
-                "Error creating placeholder for path: {}",
-                relativePath,
-                e
-            );
+                    "Error creating placeholder for path: {}",
+                    relativePath,
+                    e);
             return false;
         } finally {
             lock.writeLock().unlock();
@@ -329,8 +344,7 @@ public class FileProviderIntegration {
         try {
             if (!isInitialized.get()) {
                 LOGGER.error(
-                    "Cannot materialize placeholder: File Provider not initialized"
-                );
+                        "Cannot materialize placeholder: File Provider not initialized");
                 return false;
             }
 
@@ -342,17 +356,15 @@ public class FileProviderIntegration {
 
             if (placeholder.isMaterialized) {
                 LOGGER.debug(
-                    "Placeholder already materialized: {}",
-                    relativePath
-                );
+                        "Placeholder already materialized: {}",
+                        relativePath);
                 return true;
             }
 
             if (materializingFiles.contains(relativePath)) {
                 LOGGER.debug(
-                    "Materialization already in progress for: {}",
-                    relativePath
-                );
+                        "Materialization already in progress for: {}",
+                        relativePath);
                 return false;
             }
 
@@ -368,31 +380,25 @@ public class FileProviderIntegration {
 
                 if (content == null && !placeholder.isDirectory) {
                     LOGGER.error(
-                        "Failed to load content for file: {}",
-                        relativePath
-                    );
+                            "Failed to load content for file: {}",
+                            relativePath);
                     return false;
                 }
 
                 // Provide content to native File Provider
-                if (
-                    nativeMaterializePlaceholder(
+                if (nativeMaterializePlaceholder(
                         nativeProviderRef,
-                        relativePath,
-                        content
-                    )
-                ) {
+                        resolvePath(relativePath),
+                        content)) {
                     placeholder.isMaterialized = true;
                     LOGGER.info(
-                        "Successfully materialized placeholder: {}",
-                        relativePath
-                    );
+                            "Successfully materialized placeholder: {}",
+                            relativePath);
                     return true;
                 } else {
                     LOGGER.error(
-                        "Failed to materialize placeholder in native layer: {}",
-                        relativePath
-                    );
+                            "Failed to materialize placeholder in native layer: {}",
+                            relativePath);
                     return false;
                 }
             } finally {
@@ -400,10 +406,9 @@ public class FileProviderIntegration {
             }
         } catch (Exception e) {
             LOGGER.error(
-                "Error materializing placeholder: {}",
-                relativePath,
-                e
-            );
+                    "Error materializing placeholder: {}",
+                    relativePath,
+                    e);
             return false;
         } finally {
             lock.writeLock().unlock();
@@ -414,15 +419,14 @@ public class FileProviderIntegration {
      * Updates an existing placeholder with new metadata.
      *
      * @param relativePath relative path of the placeholder
-     * @param size new file size
+     * @param size         new file size
      * @param lastModified new last modification timestamp
      * @return true if update was successful
      */
     public boolean updatePlaceholder(
-        String relativePath,
-        long size,
-        long lastModified
-    ) {
+            String relativePath,
+            long size,
+            long lastModified) {
         lock.writeLock().lock();
         try {
             if (!isInitialized.get()) {
@@ -434,22 +438,18 @@ public class FileProviderIntegration {
                 return false;
             }
 
-            if (
-                nativeUpdatePlaceholder(
+            if (nativeUpdatePlaceholder(
                     nativeProviderRef,
-                    relativePath,
+                    resolvePath(relativePath),
                     size,
-                    lastModified
-                )
-            ) {
+                    lastModified)) {
                 // Update our tracking information
                 PlaceholderInfo updated = new PlaceholderInfo(
-                    relativePath,
-                    size,
-                    lastModified,
-                    placeholder.isDirectory,
-                    placeholder.materializationPolicy
-                );
+                        relativePath,
+                        size,
+                        lastModified,
+                        placeholder.isDirectory,
+                        placeholder.materializationPolicy);
                 updated.isMaterialized = placeholder.isMaterialized;
                 placeholders.put(relativePath, updated);
 
@@ -479,7 +479,7 @@ public class FileProviderIntegration {
                 return false;
             }
 
-            if (nativeRemovePlaceholder(nativeProviderRef, relativePath)) {
+            if (nativeRemovePlaceholder(nativeProviderRef, resolvePath(relativePath))) {
                 placeholders.remove(relativePath);
                 materializingFiles.remove(relativePath);
                 LOGGER.debug("Placeholder removed: {}", relativePath);
@@ -550,14 +550,11 @@ public class FileProviderIntegration {
         try {
             Map<String, String> info = new ConcurrentHashMap<>();
 
-            for (Map.Entry<
-                String,
-                PlaceholderInfo
-            > entry : placeholders.entrySet()) {
+            for (Map.Entry<String, PlaceholderInfo> entry : placeholders.entrySet()) {
                 PlaceholderInfo placeholder = entry.getValue();
                 String status = placeholder.isMaterialized
-                    ? "materialized"
-                    : "placeholder";
+                        ? "materialized"
+                        : "placeholder";
                 if (materializingFiles.contains(entry.getKey())) {
                     status = "materializing";
                 }
@@ -571,7 +568,8 @@ public class FileProviderIntegration {
     }
 
     /**
-     * Callback method called from native code when a placeholder needs to be materialized.
+     * Callback method called from native code when a placeholder needs to be
+     * materialized.
      * This method is called from the native File Provider extension.
      *
      * @param relativePath the path of the file that needs materialization
@@ -580,34 +578,32 @@ public class FileProviderIntegration {
     private boolean onMaterializationRequest(String relativePath) {
         LOGGER.debug("Materialization requested for: {}", relativePath);
 
-        // Use fixed thread pool instead of creating new threads to prevent OutOfMemoryError
-        if (
-            materializationExecutor != null &&
-            !materializationExecutor.isShutdown()
-        ) {
+        // Use fixed thread pool instead of creating new threads to prevent
+        // OutOfMemoryError
+        if (materializationExecutor != null &&
+                !materializationExecutor.isShutdown()) {
             materializationExecutor.submit(() -> {
                 try {
                     materializePlaceholder(relativePath);
                 } catch (Exception e) {
                     LOGGER.error(
-                        "Error in background materialization for: {}",
-                        relativePath,
-                        e
-                    );
+                            "Error in background materialization for: {}",
+                            relativePath,
+                            e);
                 }
             });
             return true;
         } else {
             LOGGER.warn(
-                "Materialization executor is not available for: {}",
-                relativePath
-            );
+                    "Materialization executor is not available for: {}",
+                    relativePath);
             return false;
         }
     }
 
     /**
-     * Callback method called from native code when a file is evicted from the system.
+     * Callback method called from native code when a file is evicted from the
+     * system.
      *
      * @param relativePath the path of the evicted file
      */
@@ -618,9 +614,8 @@ public class FileProviderIntegration {
             if (placeholder != null) {
                 placeholder.isMaterialized = false;
                 LOGGER.debug(
-                    "File evicted, converted back to placeholder: {}",
-                    relativePath
-                );
+                        "File evicted, converted back to placeholder: {}",
+                        relativePath);
             }
 
             // Clear from cache if using FileChangeCallback
@@ -637,22 +632,16 @@ public class FileProviderIntegration {
      */
     private void cleanup() {
         // Shutdown materialization executor
-        if (
-            materializationExecutor != null &&
-            !materializationExecutor.isShutdown()
-        ) {
+        if (materializationExecutor != null &&
+                !materializationExecutor.isShutdown()) {
             materializationExecutor.shutdown();
             try {
                 // Wait for tasks to complete gracefully
-                if (
-                    !materializationExecutor.awaitTermination(
+                if (!materializationExecutor.awaitTermination(
                         30,
-                        TimeUnit.SECONDS
-                    )
-                ) {
+                        TimeUnit.SECONDS)) {
                     LOGGER.warn(
-                        "Materialization tasks did not complete in time, forcing shutdown"
-                    );
+                            "Materialization tasks did not complete in time, forcing shutdown");
                     materializationExecutor.shutdownNow();
                 }
             } catch (InterruptedException e) {
@@ -671,7 +660,8 @@ public class FileProviderIntegration {
         materializingFiles.clear();
     }
 
-    // Native method declarations - these are implemented in libf1r3drive-fileprovider.dylib
+    // Native method declarations - these are implemented in
+    // libf1r3drive-fileprovider.dylib
 
     /**
      * Checks if the native File Provider library is available.
@@ -684,15 +674,14 @@ public class FileProviderIntegration {
      * Creates a native File Provider extension.
      *
      * @param domainIdentifier the domain identifier
-     * @param displayName the display name
-     * @param rootPath the root path
+     * @param displayName      the display name
+     * @param rootPath         the root path
      * @return native provider reference or 0 on failure
      */
     private native long nativeCreateProvider(
-        String domainIdentifier,
-        String displayName,
-        String rootPath
-    );
+            String domainIdentifier,
+            String displayName,
+            String rootPath);
 
     /**
      * Registers the File Provider domain with the system.
@@ -712,64 +701,60 @@ public class FileProviderIntegration {
     /**
      * Creates a placeholder file in the native File Provider.
      *
-     * @param providerRef the native provider reference
-     * @param relativePath the relative path
-     * @param size the file size
-     * @param lastModified the last modification timestamp
-     * @param itemType the item type (file/directory)
+     * @param providerRef           the native provider reference
+     * @param relativePath          the relative path
+     * @param size                  the file size
+     * @param lastModified          the last modification timestamp
+     * @param itemType              the item type (file/directory)
      * @param materializationPolicy the materialization policy
      * @return true if placeholder was created
      */
     private native boolean nativeCreatePlaceholder(
-        long providerRef,
-        String relativePath,
-        long size,
-        long lastModified,
-        int itemType,
-        int materializationPolicy
-    );
+            long providerRef,
+            String relativePath,
+            long size,
+            long lastModified,
+            int itemType,
+            int materializationPolicy);
 
     /**
      * Materializes a placeholder with content.
      *
-     * @param providerRef the native provider reference
+     * @param providerRef  the native provider reference
      * @param relativePath the relative path
-     * @param content the file content (may be null for directories)
+     * @param content      the file content (may be null for directories)
      * @return true if materialization was successful
      */
     private native boolean nativeMaterializePlaceholder(
-        long providerRef,
-        String relativePath,
-        byte[] content
-    );
+            long providerRef,
+            String relativePath,
+            byte[] content);
 
     /**
      * Updates placeholder metadata.
      *
-     * @param providerRef the native provider reference
+     * @param providerRef  the native provider reference
      * @param relativePath the relative path
-     * @param size the new file size
+     * @param size         the new file size
      * @param lastModified the new last modification timestamp
      * @return true if update was successful
      */
     private native boolean nativeUpdatePlaceholder(
-        long providerRef,
-        String relativePath,
-        long size,
-        long lastModified
-    );
+            long providerRef,
+            String relativePath,
+            long size,
+            long lastModified);
 
     /**
      * Removes a placeholder from the File Provider.
      *
-     * @param providerRef the native provider reference
+     * @param providerRef  the native provider reference
      * @param relativePath the relative path
      * @return true if removal was successful
      */
     private native boolean nativeRemovePlaceholder(
-        long providerRef,
-        String relativePath
-    );
+            long providerRef,
+            String relativePath);
 
     /**
      * Cleans up native resources.

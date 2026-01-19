@@ -1,19 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    
+
     <!-- Console appender with MDC pattern -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{20} [%X{operationId:-}] [%X{action:-}] [%X{path:-}] - %msg%n</pattern>
         </encoder>
     </appender>
-    
+
     <!-- File appender for detailed logging -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>logs/f1r3drive.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>logs/f1r3drive.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
-            <maxFileSize>100MB</maxFileSize>
+            <fileNamePattern>logs/f1r3drive.%d{yyyy-MM-dd}.gz</fileNamePattern>
             <maxHistory>30</maxHistory>
             <totalSizeCap>1GB</totalSizeCap>
         </rollingPolicy>
@@ -21,21 +20,120 @@
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} [OP:%X{operationId:-none}] [ACTION:%X{action:-none}] [PATH:%X{path:-none}] - %msg%n</pattern>
         </encoder>
     </appender>
-    
+
     <!-- Logger for F1r3Drive components -->
     <logger name="io.f1r3fly.f1r3drive" level="DEBUG" additivity="false">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
     </logger>
-    
+
     <!-- Logger specifically for blockchain operations -->
     <logger name="io.f1r3fly.f1r3drive.blockchain" level="DEBUG" additivity="false">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
     </logger>
-    
+
     <!-- Logger for FUSE operations -->
     <logger name="io.f1r3fly.f1r3drive.app.F1r3DriveFuse" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <!-- Logger for filesystem operations -->
+    <logger name="io.f1r3fly.f1r3drive.filesystem" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <!-- Logger specifically for wallet directories -->
+    <logger name="io.f1r3fly.f1r3drive.filesystem.local.LockedWalletDirectory" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <logger name="io.f1r3fly.f1r3drive.filesystem.local.UnlockedWalletDirectory" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <logger name="io.f1r3fly.f1r3drive.filesystem.local.TokenDirectory" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <!-- Logger for folder operations -->
+    <logger name="io.f1r3fly.f1r3drive.folders" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <!-- Logger for physical wallet management -->
+    <logger name="io.f1r3fly.f1r3drive.folders.FolderTokenManager" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <logger name="io.f1r3fly.f1r3drive.folders.AutoFolderCreator" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <logger name="io.f1r3fly.f1r3drive.folders.BlockchainFolderIntegration" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <!-- Logger for Change Watcher and Monitoring -->
+    <logger name="io.f1r3fly.f1r3drive.platform" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <logger name="io.f1r3fly.f1r3drive.platform.ChangeWatcher" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <logger name="io.f1r3fly.f1r3drive.platform.ChangeWatcherFactory" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <logger name="io.f1r3fly.f1r3drive.platform.F1r3DriveChangeListener" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <logger name="io.f1r3fly.f1r3drive.platform.macos.MacOSChangeWatcher" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <logger name="io.f1r3fly.f1r3drive.platform.linux.LinuxChangeWatcher" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <!-- Logger for State Change Events Manager -->
+    <logger name="io.f1r3fly.f1r3drive.background.state.StateChangeEventsManager" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <!-- Logger for Placeholder Manager -->
+    <logger name="io.f1r3fly.f1r3drive.placeholder.PlaceholderManager" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <!-- Logger for File System Events -->
+    <logger name="io.f1r3fly.f1r3drive.filesystem.events" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <!-- Logger for Platform Detection -->
+    <logger name="io.f1r3fly.f1r3drive.platform.PlatformDetector" level="DEBUG" additivity="false">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
     </logger>
@@ -44,5 +142,5 @@
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>
-    
+
 </configuration>

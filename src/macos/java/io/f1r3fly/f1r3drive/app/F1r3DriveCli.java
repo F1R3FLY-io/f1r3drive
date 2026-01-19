@@ -38,108 +38,65 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
-@Command(
-    name = "f1r3drive-macos",
-    mixinStandardHelpOptions = true,
-    version = "f1r3drive-macos 1.0",
-    description = "F1r3Drive for macOS - A blockchain-based file system with native macOS integration."
-)
+@Command(name = "f1r3drive-macos", mixinStandardHelpOptions = true, version = "f1r3drive-macos 1.0", description = "F1r3Drive for macOS - A blockchain-based file system with native macOS integration.")
 class F1r3DriveCli implements Callable<Integer> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(
-        F1r3DriveCli.class
-    );
+            F1r3DriveCli.class);
 
-    @Option(
-        names = { "-h", "--validator-host" },
-        description = "Host of the F1r3fly blockchain internal gRPC API to connect to. Defaults to localhost."
-    )
+    @Option(names = { "-h",
+            "--validator-host" }, description = "Host of the F1r3fly blockchain internal gRPC API to connect to. Defaults to localhost.")
     private String validatorHost = "localhost";
 
-    @Option(
-        names = { "-p", "--validator-port" },
-        description = "Port of the F1r3fly blockchain internal gRPC API to connect to. Defaults to 40402."
-    )
+    @Option(names = { "-p",
+            "--validator-port" }, description = "Port of the F1r3fly blockchain internal gRPC API to connect to. Defaults to 40402.")
     private int validatorPort = 40402;
 
-    @Option(
-        names = { "-oh", "--observer-host" },
-        description = "Host of the F1r3fly blockchain observer gRPC API to connect to. Defaults to localhost."
-    )
+    @Option(names = { "-oh",
+            "--observer-host" }, description = "Host of the F1r3fly blockchain observer gRPC API to connect to. Defaults to localhost.")
     private String observerHost = "localhost";
 
-    @Option(
-        names = { "-op", "--observer-port" },
-        description = "Port of the F1r3fly blockchain observer gRPC API to connect to. Defaults to 40403."
-    )
+    @Option(names = { "-op",
+            "--observer-port" }, description = "Port of the F1r3fly blockchain observer gRPC API to connect to. Defaults to 40403.")
     private int observerPort = 40403;
 
-    @Option(
-        names = { "-ck", "--cipher-key-path" },
-        required = true,
-        description = "Cipher key path. If file not found, a new key will be generated."
-    )
+    @Option(names = { "-ck",
+            "--cipher-key-path" }, required = true, description = "Cipher key path. If file not found, a new key will be generated.")
     private String cipherKeyPath;
 
-    @Parameters(
-        index = "0",
-        description = "The path to monitor and integrate with F1r3Drive."
-    )
+    @Parameters(index = "0", description = "The path to monitor and integrate with F1r3Drive.")
     private Path mountPoint;
 
-    @Option(
-        names = { "-ra", "--rev-address" },
-        description = "The rev address of the wallet to unlock."
-    )
+    @Option(names = { "-ra", "--rev-address" }, description = "The rev address of the wallet to unlock.")
     private String revAddress;
 
-    @Option(
-        names = { "-pk", "--private-key" },
-        description = "The private key of the wallet to unlock."
-    )
+    @Option(names = { "-pk", "--private-key" }, description = "The private key of the wallet to unlock.")
     private String privateKey;
 
-    @Option(
-        names = { "-mp", "--manual-propose" },
-        required = true,
-        description = "Manual propose configuration. If true, will propose and wait for finalization. If false, will skip propose and finalization waiting."
-    )
+    @Option(names = { "-mp",
+            "--manual-propose" }, required = true, description = "Manual propose configuration. If true, will propose and wait for finalization. If false, will skip propose and finalization waiting.")
     private boolean manualPropose;
 
-    @Option(
-        names = { "-d", "--debug" },
-        description = "Enable debug mode for verbose logging."
-    )
+    @Option(names = { "-d", "--debug" }, description = "Enable debug mode for verbose logging.")
     private boolean debugMode = false;
 
-    @Option(
-        names = { "--native-integration" },
-        description = "Enable native macOS integration (requires native libraries)."
-    )
+    @Option(names = {
+            "--native-integration" }, description = "Enable native macOS integration (requires native libraries).")
     private boolean nativeIntegration = false;
 
-    @Option(
-        names = { "--demo-mode" },
-        description = "Enable demo mode (bypasses blockchain connection for testing)."
-    )
+    @Option(names = { "--demo-mode" }, description = "Enable demo mode (bypasses blockchain connection for testing).")
     private boolean demoMode = false;
 
-    @Option(
-        names = { "--disable-token-discovery" },
-        description = "Disable automatic blockchain token discovery and folder creation."
-    )
+    @Option(names = {
+            "--disable-token-discovery" }, description = "Disable automatic blockchain token discovery and folder creation.")
     private boolean disableTokenDiscovery = false;
 
-    @Option(
-        names = { "--token-discovery-interval" },
-        description = "Interval in minutes for periodic token discovery. Default: 30 minutes. Set to 0 to disable periodic discovery."
-    )
+    @Option(names = {
+            "--token-discovery-interval" }, description = "Interval in minutes for periodic token discovery. Default: 30 minutes. Set to 0 to disable periodic discovery.")
     private int tokenDiscoveryInterval = 30;
 
-    @Option(
-        names = { "--demo-folder-path" },
-        description = "Path for physical folder creation alongside the mount point. If not specified, uses the same directory as the mount point."
-    )
+    @Option(names = {
+            "--demo-folder-path" }, description = "Path for physical folder creation alongside the mount point. If not specified, uses the same directory as the mount point.")
     private String demoFolderPath;
 
     // Core components
@@ -174,9 +131,8 @@ class F1r3DriveCli implements Callable<Integer> {
             setupShutdownHook();
 
             LOGGER.info(
-                "F1r3Drive for macOS started successfully. Monitoring path: {}",
-                mountPoint
-            );
+                    "F1r3Drive for macOS started successfully. Monitoring path: {}",
+                    mountPoint);
             LOGGER.info("Press Ctrl+C to stop...");
 
             // Wait for shutdown signal
@@ -194,36 +150,31 @@ class F1r3DriveCli implements Callable<Integer> {
      */
     private void initialize() throws Exception {
         LOGGER.info(
-            "Initializing F1r3Drive for macOS with mount path: {}",
-            mountPoint
-        );
+                "Initializing F1r3Drive for macOS with mount path: {}",
+                mountPoint);
 
         // Initialize encryption
         AESCipher.init(cipherKeyPath);
 
         // Initialize blockchain client first
         blockchainClient = new F1r3flyBlockchainClient(
-            validatorHost,
-            validatorPort,
-            observerHost,
-            observerPort,
-            manualPropose
-        );
+                validatorHost,
+                validatorPort,
+                observerHost,
+                observerPort,
+                manualPropose);
 
         // Initialize blockchain folder integration system for physical folders
         if (!disableTokenDiscovery) {
             LOGGER.info(
-                "Initializing blockchain token discovery system for physical folders..."
-            );
+                    "Initializing blockchain token discovery system for physical folders...");
             folderIntegration = new BlockchainFolderIntegration(
-                blockchainClient,
-                demoFolderPath
-            );
+                    blockchainClient,
+                    demoFolderPath);
             startTokenDiscovery();
         } else {
             LOGGER.info(
-                "Blockchain token discovery disabled by user configuration"
-            );
+                    "Blockchain token discovery disabled by user configuration");
         }
 
         // Initialize filesystem with blockchain client
@@ -237,232 +188,204 @@ class F1r3DriveCli implements Callable<Integer> {
         // Create blockchain context with real wallet information
         if (revAddress != null && privateKey != null) {
             // Validate private key
-            String derivedAddress =
-                PrivateKeyValidator.deriveRevAddressFromPrivateKey(privateKey);
+            String derivedAddress = PrivateKeyValidator.deriveRevAddressFromPrivateKey(privateKey);
             if (!revAddress.equals(derivedAddress)) {
                 throw new RuntimeException(
-                    "Private key does not match the provided REV address"
-                );
+                        "Private key does not match the provided REV address");
             }
             byte[] privateKeyBytes = fr.acinq.secp256k1.Hex.decode(privateKey);
 
             // Create wallet info
             RevWalletInfo walletInfo = new RevWalletInfo(
-                revAddress,
-                privateKeyBytes
-            );
+                    revAddress,
+                    privateKeyBytes);
 
             // Create deploy dispatcher
             DeployDispatcher deployDispatcher = new DeployDispatcher(
-                blockchainClient,
-                stateChangeEventsManager
-            );
+                    blockchainClient,
+                    stateChangeEventsManager);
 
             // Create blockchain context
             blockchainContext = new BlockchainContext(
-                walletInfo,
-                deployDispatcher
-            );
+                    walletInfo,
+                    deployDispatcher);
 
             LOGGER.info(
-                "Created blockchain context for wallet: {}",
-                revAddress
-            );
+                    "Created blockchain context for wallet: {}",
+                    revAddress);
 
             // Unlock the root directory to create TokenDirectory in memory
             LOGGER.info("Unlocking root directory for wallet: {}", revAddress);
             fileSystem.unlockRootDirectory(revAddress, privateKey);
             LOGGER.info(
-                "Root directory unlocked successfully - TokenDirectory created"
-            );
+                    "Root directory unlocked successfully - TokenDirectory created");
 
             // Synchronize in-memory tokens to physical filesystem
             synchronizeTokensToPhysicalFileSystem(revAddress);
         } else {
             LOGGER.warn(
-                "No wallet credentials provided - some blockchain features will be unavailable"
-            );
+                    "No wallet credentials provided - some blockchain features will be unavailable");
         }
 
         // Initialize placeholder manager
         CacheConfiguration cacheConfig = CacheConfiguration.builder()
-            .maxCacheSize(100 * 1024 * 1024) // 100MB
-            .evictionPolicy(CacheConfiguration.EvictionPolicy.LRU)
-            .build();
+                .maxCacheSize(100 * 1024 * 1024) // 100MB
+                .evictionPolicy(CacheConfiguration.EvictionPolicy.LRU)
+                .build();
 
         // Create FileChangeCallback for blockchain integration
-        io.f1r3fly.f1r3drive.platform.FileChangeCallback fileChangeCallback =
-            new io.f1r3fly.f1r3drive.platform.FileChangeCallback() {
-                @Override
-                public byte[] loadFileContent(String path) {
-                    if (blockchainContext != null) {
-                        try {
-                            // Real implementation - load from blockchain
-                            LOGGER.debug(
+        io.f1r3fly.f1r3drive.platform.FileChangeCallback fileChangeCallback = new io.f1r3fly.f1r3drive.platform.FileChangeCallback() {
+            @Override
+            public byte[] loadFileContent(String path) {
+                if (blockchainContext != null) {
+                    try {
+                        // Real implementation - load from blockchain
+                        LOGGER.debug(
                                 "Loading content from blockchain for: {}",
-                                path
-                            );
-                            // TODO: Implement actual blockchain file loading
-                            return (
-                                "Blockchain content for " + path
-                            ).getBytes();
-                        } catch (Exception e) {
-                            LOGGER.error(
+                                path);
+                        // TODO: Implement actual blockchain file loading
+                        return ("Blockchain content for " + path).getBytes();
+                    } catch (Exception e) {
+                        LOGGER.error(
                                 "Failed to load content from blockchain for path: {}",
                                 path,
-                                e
-                            );
-                            return new byte[0];
-                        }
-                    } else {
-                        LOGGER.debug(
-                            "No blockchain context - returning empty content for: {}",
-                            path
-                        );
+                                e);
                         return new byte[0];
                     }
+                } else {
+                    LOGGER.debug(
+                            "No blockchain context - returning empty content for: {}",
+                            path);
+                    return new byte[0];
                 }
+            }
 
-                @Override
-                public boolean fileExistsInBlockchain(String path) {
-                    if (blockchainContext != null) {
-                        try {
-                            // Real implementation - check blockchain
-                            LOGGER.debug(
+            @Override
+            public boolean fileExistsInBlockchain(String path) {
+                if (blockchainContext != null) {
+                    try {
+                        // Real implementation - check blockchain
+                        LOGGER.debug(
                                 "Checking file existence in blockchain for: {}",
-                                path
-                            );
-                            // TODO: Implement actual blockchain file existence check
-                            return true;
-                        } catch (Exception e) {
-                            LOGGER.error(
+                                path);
+                        // TODO: Implement actual blockchain file existence check
+                        return true;
+                    } catch (Exception e) {
+                        LOGGER.error(
                                 "Failed to check file existence in blockchain for path: {}",
                                 path,
-                                e
-                            );
-                            return false;
-                        }
+                                e);
+                        return false;
                     }
-                    return false;
                 }
+                return false;
+            }
 
-                @Override
-                public io.f1r3fly.f1r3drive.platform.FileChangeCallback.FileMetadata getFileMetadata(
-                    String path
-                ) {
-                    if (blockchainContext != null) {
-                        try {
-                            // Real implementation - get metadata from blockchain
-                            LOGGER.debug(
+            @Override
+            public io.f1r3fly.f1r3drive.platform.FileChangeCallback.FileMetadata getFileMetadata(
+                    String path) {
+                if (blockchainContext != null) {
+                    try {
+                        // Real implementation - get metadata from blockchain
+                        LOGGER.debug(
                                 "Getting file metadata from blockchain for: {}",
-                                path
-                            );
-                            // TODO: Implement actual blockchain metadata retrieval
-                            return new io.f1r3fly.f1r3drive.platform.FileChangeCallback.FileMetadata(
+                                path);
+                        // TODO: Implement actual blockchain metadata retrieval
+                        return new io.f1r3fly.f1r3drive.platform.FileChangeCallback.FileMetadata(
                                 1024,
                                 System.currentTimeMillis(),
                                 "blockchain-checksum",
-                                false
-                            );
-                        } catch (Exception e) {
-                            LOGGER.error(
+                                false);
+                    } catch (Exception e) {
+                        LOGGER.error(
                                 "Failed to get file metadata from blockchain for path: {}",
                                 path,
-                                e
-                            );
-                        }
+                                e);
                     }
-                    return new io.f1r3fly.f1r3drive.platform.FileChangeCallback.FileMetadata(
+                }
+                return new io.f1r3fly.f1r3drive.platform.FileChangeCallback.FileMetadata(
                         0,
                         System.currentTimeMillis(),
                         "empty",
-                        false
-                    );
-                }
+                        false);
+            }
 
-                @Override
-                public void onFileSavedToBlockchain(
+            @Override
+            public void onFileSavedToBlockchain(
                     String path,
-                    byte[] content
-                ) {
-                    if (blockchainContext != null) {
-                        LOGGER.info(
+                    byte[] content) {
+                if (blockchainContext != null) {
+                    LOGGER.info(
                             "File saved to blockchain: {} ({} bytes)",
                             path,
-                            content.length
-                        );
-                        // TODO: Implement actual blockchain save notification
-                    } else {
-                        LOGGER.debug(
+                            content.length);
+                    // TODO: Implement actual blockchain save notification
+                } else {
+                    LOGGER.debug(
                             "No blockchain context - file save notification ignored: {}",
-                            path
-                        );
-                    }
+                            path);
                 }
+            }
 
-                @Override
-                public void onFileDeletedFromBlockchain(String path) {
-                    if (blockchainContext != null) {
-                        LOGGER.info("File deleted from blockchain: {}", path);
-                        // TODO: Implement actual blockchain delete notification
-                    } else {
-                        LOGGER.debug(
+            @Override
+            public void onFileDeletedFromBlockchain(String path) {
+                if (blockchainContext != null) {
+                    LOGGER.info("File deleted from blockchain: {}", path);
+                    // TODO: Implement actual blockchain delete notification
+                } else {
+                    LOGGER.debug(
                             "No blockchain context - file delete notification ignored: {}",
-                            path
-                        );
-                    }
+                            path);
                 }
+            }
 
-                @Override
-                public void preloadFile(String path, int priority) {
-                    if (blockchainContext != null) {
-                        LOGGER.debug(
+            @Override
+            public void preloadFile(String path, int priority) {
+                if (blockchainContext != null) {
+                    LOGGER.debug(
                             "Preloading file from blockchain: {} with priority {}",
                             path,
-                            priority
-                        );
-                        // TODO: Implement actual blockchain preloading
-                    } else {
-                        LOGGER.debug(
+                            priority);
+                    // TODO: Implement actual blockchain preloading
+                } else {
+                    LOGGER.debug(
                             "No blockchain context - preload ignored: {}",
-                            path
-                        );
-                    }
+                            path);
                 }
+            }
 
-                @Override
-                public void clearCache(String path) {
-                    LOGGER.debug("Clearing cache for path: {}", path);
-                    // Cache clearing is local operation, always available
-                }
+            @Override
+            public void clearCache(String path) {
+                LOGGER.debug("Clearing cache for path: {}", path);
+                // Cache clearing is local operation, always available
+            }
 
-                @Override
-                public io.f1r3fly.f1r3drive.platform.FileChangeCallback.CacheStatistics getCacheStatistics() {
-                    // TODO: Implement real cache statistics
-                    return new io.f1r3fly.f1r3drive.platform.FileChangeCallback.CacheStatistics(
+            @Override
+            public io.f1r3fly.f1r3drive.platform.FileChangeCallback.CacheStatistics getCacheStatistics() {
+                // TODO: Implement real cache statistics
+                return new io.f1r3fly.f1r3drive.platform.FileChangeCallback.CacheStatistics(
                         0L,
                         0L,
                         0L,
                         100L * 1024 * 1024,
-                        0
-                    );
-                }
-            };
+                        0);
+            }
+        };
 
         placeholderManager = new PlaceholderManager(fileChangeCallback);
 
         // Initialize state change events manager
-        io.f1r3fly.f1r3drive.background.state.StateChangeEventsManagerConfig config =
-            io.f1r3fly.f1r3drive.background.state.StateChangeEventsManagerConfig.builder()
+        io.f1r3fly.f1r3drive.background.state.StateChangeEventsManagerConfig config = io.f1r3fly.f1r3drive.background.state.StateChangeEventsManagerConfig
+                .builder()
                 .queueCapacity(1000)
                 .build();
         stateChangeEventsManager = new StateChangeEventsManager(config);
 
         // Initialize change listener
         changeListener = new F1r3DriveChangeListener(
-            fileSystem,
-            placeholderManager
-        );
+                fileSystem,
+                placeholderManager,
+                mountPoint.toString());
         stateChangeEventsManager.setChangeListener(changeListener);
 
         // Initialize change watcher
@@ -471,13 +394,11 @@ class F1r3DriveCli implements Callable<Integer> {
             LOGGER.info("Real change watcher created successfully");
         } catch (Exception e) {
             LOGGER.warn(
-                "Failed to create real change watcher: {}",
-                e.getMessage()
-            );
+                    "Failed to create real change watcher: {}",
+                    e.getMessage());
             throw new RuntimeException(
-                "Change watcher initialization failed",
-                e
-            );
+                    "Change watcher initialization failed",
+                    e);
         }
 
         LOGGER.info("F1r3Drive components initialized successfully");
@@ -488,9 +409,8 @@ class F1r3DriveCli implements Callable<Integer> {
      */
     private void start() throws Exception {
         LOGGER.info(
-            "Starting F1r3Drive system with mount path: {}",
-            mountPoint
-        );
+                "Starting F1r3Drive system with mount path: {}",
+                mountPoint);
 
         // Connect to blockchain
         if (!demoMode && this.blockchainContext != null) {
@@ -498,12 +418,11 @@ class F1r3DriveCli implements Callable<Integer> {
                 // Test blockchain connection
                 blockchainClient.waitForNodesSynchronization();
                 LOGGER.info(
-                    "Successfully connected to blockchain - Validator: {}:{}, Observer: {}:{}",
-                    validatorHost,
-                    validatorPort,
-                    observerHost,
-                    observerPort
-                );
+                        "Successfully connected to blockchain - Validator: {}:{}, Observer: {}:{}",
+                        validatorHost,
+                        validatorPort,
+                        observerHost,
+                        observerPort);
             } catch (Exception e) {
                 LOGGER.error("Failed to connect to blockchain", e);
                 throw new RuntimeException("Blockchain connection failed", e);
@@ -512,17 +431,46 @@ class F1r3DriveCli implements Callable<Integer> {
             LOGGER.info("Demo mode - skipping blockchain connection");
         } else {
             LOGGER.warn(
-                "No blockchain context available - limited functionality"
-            );
+                    "No blockchain context available - limited functionality");
         }
 
         // Start state change events manager
         stateChangeEventsManager.start();
         LOGGER.info("State change events manager started");
 
+        // Configure bi-directional sync for macOS
+        if (changeWatcher instanceof io.f1r3fly.f1r3drive.platform.macos.MacOSChangeWatcher
+                && fileSystem instanceof io.f1r3fly.f1r3drive.filesystem.InMemoryFileSystem) {
+            LOGGER.info("Configuring macOS specific integrations");
+            ((io.f1r3fly.f1r3drive.platform.macos.MacOSChangeWatcher) changeWatcher).setInMemoryFileSystem(
+                    (io.f1r3fly.f1r3drive.filesystem.InMemoryFileSystem) fileSystem);
+        }
+
         // Start change monitoring
         changeWatcher.startMonitoring(mountPoint.toString(), changeListener);
         LOGGER.info("File monitoring started for path: {}", mountPoint);
+
+        // Connect FileProvider integration back to FileSystem
+        if (changeWatcher instanceof io.f1r3fly.f1r3drive.platform.macos.MacOSChangeWatcher
+                && fileSystem instanceof io.f1r3fly.f1r3drive.filesystem.InMemoryFileSystem) {
+            io.f1r3fly.f1r3drive.platform.macos.MacOSChangeWatcher macWatcher = (io.f1r3fly.f1r3drive.platform.macos.MacOSChangeWatcher) changeWatcher;
+            io.f1r3fly.f1r3drive.filesystem.InMemoryFileSystem inMemoryFS = (io.f1r3fly.f1r3drive.filesystem.InMemoryFileSystem) fileSystem;
+
+            io.f1r3fly.f1r3drive.platform.macos.FileProviderIntegration fileProvider = macWatcher
+                    .getFileProviderIntegration();
+
+            if (fileProvider != null) {
+                LOGGER.info("Connecting FileProvider to InMemoryFileSystem");
+                inMemoryFS.setFileProviderIntegration(fileProvider);
+
+                if (revAddress != null && privateKey != null) {
+                    LOGGER.info("Syncing initial state with FileProvider");
+                    inMemoryFS.syncWithFileProvider();
+                }
+            } else {
+                LOGGER.warn("FileProvider integration not available in MacOSChangeWatcher");
+            }
+        }
 
         // Preload blockchain files as placeholders (if wallet is provided)
         if (revAddress != null && privateKey != null) {
@@ -575,13 +523,11 @@ class F1r3DriveCli implements Callable<Integer> {
                 try {
                     folderIntegration.terminate();
                     LOGGER.info(
-                        "Physical wallet management and blockchain integration shutdown complete"
-                    );
+                            "Physical wallet management and blockchain integration shutdown complete");
                 } catch (Exception e) {
                     LOGGER.error(
-                        "Error shutting down wallet management and folder integration",
-                        e
-                    );
+                            "Error shutting down wallet management and folder integration",
+                            e);
                 }
             }
         } catch (Exception e) {
@@ -606,9 +552,8 @@ class F1r3DriveCli implements Callable<Integer> {
             }
         } catch (Exception e) {
             LOGGER.warn(
-                "Failed to cleanup mount directory: {}",
-                e.getMessage()
-            );
+                    "Failed to cleanup mount directory: {}",
+                    e.getMessage());
         }
     }
 
@@ -621,8 +566,7 @@ class F1r3DriveCli implements Callable<Integer> {
         }
 
         try (
-            DirectoryStream<Path> stream = Files.newDirectoryStream(directory)
-        ) {
+                DirectoryStream<Path> stream = Files.newDirectoryStream(directory)) {
             for (Path entry : stream) {
                 if (Files.isDirectory(entry)) {
                     deleteDirectoryRecursively(entry);
@@ -643,8 +587,7 @@ class F1r3DriveCli implements Callable<Integer> {
         }
 
         try (
-            DirectoryStream<Path> stream = Files.newDirectoryStream(directory)
-        ) {
+                DirectoryStream<Path> stream = Files.newDirectoryStream(directory)) {
             for (Path entry : stream) {
                 if (Files.isDirectory(entry)) {
                     deleteDirectoryRecursively(entry);
@@ -662,16 +605,13 @@ class F1r3DriveCli implements Callable<Integer> {
      */
     private void setupShutdownHook() {
         Runtime.getRuntime().addShutdownHook(
-            new Thread(
-                () -> {
-                    LOGGER.info(
-                        "Shutdown signal received, stopping F1r3Drive..."
-                    );
-                    shutdown();
-                },
-                "F1r3Drive-Shutdown"
-            )
-        );
+                new Thread(
+                        () -> {
+                            LOGGER.info(
+                                    "Shutdown signal received, stopping F1r3Drive...");
+                            shutdown();
+                        },
+                        "F1r3Drive-Shutdown"));
     }
 
     /**
@@ -680,15 +620,13 @@ class F1r3DriveCli implements Callable<Integer> {
     private void preloadBlockchainFiles() {
         try {
             LOGGER.info(
-                "Preloading blockchain files for wallet: {}",
-                revAddress
-            );
+                    "Preloading blockchain files for wallet: {}",
+                    revAddress);
 
             if (demoMode) {
                 // Demo mode - files will be created on demand
                 LOGGER.info(
-                    "Demo mode - placeholder files will be created as needed"
-                );
+                        "Demo mode - placeholder files will be created as needed");
             } else {
                 // TODO: Implement blockchain file discovery and placeholder creation
                 // This would query the blockchain for files associated with the wallet
@@ -708,12 +646,12 @@ class F1r3DriveCli implements Callable<Integer> {
         try {
             ChangeWatcher watcher = ChangeWatcherFactory.createChangeWatcher();
 
-            // If we have blockchain context, we could enhance the watcher with blockchain capabilities
+            // If we have blockchain context, we could enhance the watcher with blockchain
+            // capabilities
             if (blockchainContext != null) {
                 LOGGER.info(
-                    "Change watcher enhanced with blockchain context for wallet: {}",
-                    blockchainContext.getWalletInfo().revAddress()
-                );
+                        "Change watcher enhanced with blockchain context for wallet: {}",
+                        blockchainContext.getWalletInfo().revAddress());
             }
 
             return watcher;
@@ -729,17 +667,15 @@ class F1r3DriveCli implements Callable<Integer> {
     private void synchronizeTokensToPhysicalFileSystem(String revAddress) {
         try {
             LOGGER.info(
-                "Synchronizing in-memory tokens to physical filesystem for wallet: {}",
-                revAddress
-            );
+                    "Synchronizing in-memory tokens to physical filesystem for wallet: {}",
+                    revAddress);
 
             // Find the unlocked wallet directory in filesystem
             java.io.File walletDir = findUnlockedWalletDirectory(revAddress);
             if (walletDir == null) {
                 LOGGER.warn(
-                    "Could not find unlocked wallet directory for: {}",
-                    revAddress
-                );
+                        "Could not find unlocked wallet directory for: {}",
+                        revAddress);
                 return;
             }
 
@@ -748,80 +684,60 @@ class F1r3DriveCli implements Callable<Integer> {
             if (!tokensDir.exists()) {
                 tokensDir.mkdirs();
                 LOGGER.info(
-                    "Created physical .tokens directory: {}",
-                    tokensDir.getAbsolutePath()
-                );
+                        "Created physical .tokens directory: {}",
+                        tokensDir.getAbsolutePath());
             }
 
             // Get tokens from in-memory filesystem
             try {
                 String walletPath = "/" + revAddress;
-                io.f1r3fly.f1r3drive.filesystem.common.Directory walletInMemory =
-                    fileSystem.getDirectory(walletPath);
-                if (
-                    walletInMemory instanceof
-                        io.f1r3fly.f1r3drive.filesystem.deployable.UnlockedWalletDirectory
-                ) {
-                    io.f1r3fly.f1r3drive.filesystem.deployable.UnlockedWalletDirectory unlockedWallet =
-                        (io.f1r3fly.f1r3drive.filesystem.deployable.UnlockedWalletDirectory) walletInMemory;
+                io.f1r3fly.f1r3drive.filesystem.common.Directory walletInMemory = fileSystem.getDirectory(walletPath);
+                if (walletInMemory instanceof io.f1r3fly.f1r3drive.filesystem.deployable.UnlockedWalletDirectory) {
+                    io.f1r3fly.f1r3drive.filesystem.deployable.UnlockedWalletDirectory unlockedWallet = (io.f1r3fly.f1r3drive.filesystem.deployable.UnlockedWalletDirectory) walletInMemory;
 
-                    io.f1r3fly.f1r3drive.filesystem.local.TokenDirectory tokenDirectory =
-                        unlockedWallet.getTokenDirectory();
+                    io.f1r3fly.f1r3drive.filesystem.local.TokenDirectory tokenDirectory = unlockedWallet
+                            .getTokenDirectory();
                     if (tokenDirectory != null) {
-                        Set<
-                            io.f1r3fly.f1r3drive.filesystem.common.Path
-                        > tokens = tokenDirectory.getChildren();
+                        Set<io.f1r3fly.f1r3drive.filesystem.common.Path> tokens = tokenDirectory.getChildren();
                         LOGGER.info(
-                            "Found {} tokens in memory to sync",
-                            tokens.size()
-                        );
+                                "Found {} tokens in memory to sync",
+                                tokens.size());
 
                         for (io.f1r3fly.f1r3drive.filesystem.common.Path token : tokens) {
-                            if (
-                                token instanceof
-                                    io.f1r3fly.f1r3drive.filesystem.local.TokenFile
-                            ) {
-                                io.f1r3fly.f1r3drive.filesystem.local.TokenFile tokenFile =
-                                    (io.f1r3fly.f1r3drive.filesystem.local.TokenFile) token;
+                            if (token instanceof io.f1r3fly.f1r3drive.filesystem.local.TokenFile) {
+                                io.f1r3fly.f1r3drive.filesystem.local.TokenFile tokenFile = (io.f1r3fly.f1r3drive.filesystem.local.TokenFile) token;
 
                                 // Create physical token file
-                                java.io.File physicalTokenFile =
-                                    new java.io.File(
+                                java.io.File physicalTokenFile = new java.io.File(
                                         tokensDir,
-                                        tokenFile.getName()
-                                    );
+                                        tokenFile.getName());
                                 if (!physicalTokenFile.exists()) {
                                     try {
                                         physicalTokenFile.createNewFile();
 
                                         // Token files are empty - information is in filename only
                                         java.nio.file.Files.write(
-                                            physicalTokenFile.toPath(),
-                                            new byte[0]
-                                        );
+                                                physicalTokenFile.toPath(),
+                                                new byte[0]);
 
                                         LOGGER.debug(
-                                            "Created physical token file: {}",
-                                            physicalTokenFile.getName()
-                                        );
+                                                "Created physical token file: {}",
+                                                physicalTokenFile.getName());
                                     } catch (java.io.IOException e) {
                                         LOGGER.warn(
-                                            "Failed to create token file: {}",
-                                            physicalTokenFile.getName(),
-                                            e
-                                        );
+                                                "Failed to create token file: {}",
+                                                physicalTokenFile.getName(),
+                                                e);
                                     }
                                 }
                             }
                         }
                         LOGGER.info(
-                            "Token synchronization completed for wallet: {}",
-                            revAddress
-                        );
+                                "Token synchronization completed for wallet: {}",
+                                revAddress);
                     } else {
                         LOGGER.warn(
-                            "TokenDirectory not found in unlocked wallet"
-                        );
+                                "TokenDirectory not found in unlocked wallet");
                     }
                 } else {
                     LOGGER.warn("Wallet directory is not unlocked in memory");
@@ -831,9 +747,8 @@ class F1r3DriveCli implements Callable<Integer> {
             }
         } catch (Exception e) {
             LOGGER.error(
-                "Failed to synchronize tokens to physical filesystem",
-                e
-            );
+                    "Failed to synchronize tokens to physical filesystem",
+                    e);
         }
     }
 
@@ -845,11 +760,11 @@ class F1r3DriveCli implements Callable<Integer> {
 
         // Try different possible wallet directory names
         String[] possibleNames = {
-            revAddress,
-            "111127RX...nR32PiHA", // Shortened version
-            revAddress.substring(0, 8) +
-            "..." +
-            revAddress.substring(revAddress.length() - 8),
+                revAddress,
+                "111127RX...nR32PiHA", // Shortened version
+                revAddress.substring(0, 8) +
+                        "..." +
+                        revAddress.substring(revAddress.length() - 8),
         };
 
         for (String name : possibleNames) {
@@ -857,28 +772,24 @@ class F1r3DriveCli implements Callable<Integer> {
             if (walletDir.exists() && walletDir.isDirectory()) {
                 // Check if it's unlocked (has .unlocked file or no .locked file)
                 java.io.File unlockedFile = new java.io.File(
-                    walletDir,
-                    ".unlocked"
-                );
+                        walletDir,
+                        ".unlocked");
                 java.io.File lockedFile = new java.io.File(
-                    walletDir,
-                    ".locked"
-                );
+                        walletDir,
+                        ".locked");
 
                 if (unlockedFile.exists() || !lockedFile.exists()) {
                     LOGGER.info(
-                        "Found unlocked wallet directory: {}",
-                        walletDir.getAbsolutePath()
-                    );
+                            "Found unlocked wallet directory: {}",
+                            walletDir.getAbsolutePath());
                     return walletDir;
                 }
             }
         }
 
         LOGGER.warn(
-            "Could not find unlocked wallet directory for address: {}",
-            revAddress
-        );
+                "Could not find unlocked wallet directory for address: {}",
+                revAddress);
         return null;
     }
 
@@ -888,297 +799,233 @@ class F1r3DriveCli implements Callable<Integer> {
     private void startTokenDiscovery() {
         try {
             LOGGER.info(
-                "Starting physical wallet creation and management: {}",
-                demoFolderPath
-            );
+                    "Starting physical wallet creation and management: {}",
+                    demoFolderPath);
 
             // Perform initial wallet creation and unlocking if private key provided
-            CompletableFuture<
-                BlockchainFolderIntegration.IntegrationResult
-            > discoveryFuture;
+            CompletableFuture<BlockchainFolderIntegration.IntegrationResult> discoveryFuture;
 
             // Always create ALL wallets from genesis block (all start LOCKED)
             // But exclude the wallet we have private key for
             LOGGER.info(
-                "Creating ALL wallets from blockchain with 'locked_' prefix (read-only)"
-            );
+                    "Creating ALL wallets from blockchain with 'locked_' prefix (read-only)");
 
             Set<String> excludeFromLocked = Set.of();
-            if (
-                revAddress != null &&
-                !revAddress.trim().isEmpty() &&
-                privateKey != null &&
-                !privateKey.trim().isEmpty()
-            ) {
+            if (revAddress != null &&
+                    !revAddress.trim().isEmpty() &&
+                    privateKey != null &&
+                    !privateKey.trim().isEmpty()) {
                 excludeFromLocked = Set.of(revAddress);
                 LOGGER.info(
-                    "Excluding wallet {} from locked creation (will be unlocked instead)",
-                    revAddress
-                );
+                        "Excluding wallet {} from locked creation (will be unlocked instead)",
+                        revAddress);
             }
 
             discoveryFuture = folderIntegration.discoverAndCreateAllFolders(
-                excludeFromLocked
-            );
+                    excludeFromLocked);
 
             // If specific wallet address and private key provided, unlock only that wallet
-            if (
-                revAddress != null &&
-                !revAddress.trim().isEmpty() &&
-                privateKey != null &&
-                !privateKey.trim().isEmpty()
-            ) {
+            if (revAddress != null &&
+                    !revAddress.trim().isEmpty() &&
+                    privateKey != null &&
+                    !privateKey.trim().isEmpty()) {
                 LOGGER.info(
-                    "Private key provided - wallet {} will be UNLOCKED for full access",
-                    revAddress
-                );
+                        "Private key provided - wallet {} will be UNLOCKED for full access",
+                        revAddress);
 
                 discoveryFuture = discoveryFuture.thenCompose(result -> {
                     if (result.success) {
                         LOGGER.info(
-                            "Unlocking specific wallet with provided private key: {}",
-                            revAddress
-                        );
+                                "Unlocking specific wallet with provided private key: {}",
+                                revAddress);
 
                         // Validate wallet operations after unlock
                         try {
                             folderIntegration.validateWalletOperation(
-                                revAddress,
-                                "read_file"
-                            );
+                                    revAddress,
+                                    "read_file");
                             LOGGER.info(
-                                "✓ Wallet {} ready for read operations",
-                                revAddress
-                            );
+                                    "✓ Wallet {} ready for read operations",
+                                    revAddress);
 
                             folderIntegration.validateWalletOperation(
-                                revAddress,
-                                "create_file"
-                            );
+                                    revAddress,
+                                    "create_file");
                             LOGGER.info(
-                                "✓ Wallet {} ready for write operations",
-                                revAddress
-                            );
+                                    "✓ Wallet {} ready for write operations",
+                                    revAddress);
                         } catch (IllegalStateException e) {
                             LOGGER.warn(
-                                "⚠ Wallet {} has limited access: {}",
-                                revAddress,
-                                e.getMessage()
-                            );
+                                    "⚠ Wallet {} has limited access: {}",
+                                    revAddress,
+                                    e.getMessage());
                         }
 
                         return folderIntegration.unlockPhysicalWallet(
-                            revAddress,
-                            privateKey
-                        );
+                                revAddress,
+                                privateKey);
                     } else {
                         return CompletableFuture.completedFuture(result);
                     }
                 });
             } else if (revAddress != null && !revAddress.trim().isEmpty()) {
                 LOGGER.warn(
-                    "No private key provided - wallet {} will remain locked (read-only)",
-                    revAddress
-                );
+                        "No private key provided - wallet {} will remain locked (read-only)",
+                        revAddress);
                 LOGGER.info(
-                    "To unlock wallet {}, provide --private-key parameter",
-                    revAddress
-                );
+                        "To unlock wallet {}, provide --private-key parameter",
+                        revAddress);
             } else {
                 LOGGER.info(
-                    "No specific wallet specified - all wallets will remain locked (read-only)"
-                );
+                        "No specific wallet specified - all wallets will remain locked (read-only)");
                 LOGGER.info(
-                    "To unlock a wallet, provide both --rev-address and --private-key parameters"
-                );
+                        "To unlock a wallet, provide both --rev-address and --private-key parameters");
             }
 
             discoveryFuture
-                .thenAccept(result -> {
-                    if (result.success) {
-                        LOGGER.info(
-                            "✓ Physical wallet management completed successfully!"
-                        );
-                        LOGGER.info(
-                            "  - Discovered {} wallets with {} folders",
-                            result.discoveredWallets,
-                            result.discoveredFolders
-                        );
-                        LOGGER.info(
-                            "  - Created {} wallet directories in {}",
-                            result.createdWalletDirs,
-                            demoFolderPath
-                        );
+                    .thenAccept(result -> {
+                        if (result.success) {
+                            LOGGER.info(
+                                    "✓ Physical wallet management completed successfully!");
+                            LOGGER.info(
+                                    "  - Discovered {} wallets with {} folders",
+                                    result.discoveredWallets,
+                                    result.discoveredFolders);
+                            LOGGER.info(
+                                    "  - Created {} wallet directories in {}",
+                                    result.createdWalletDirs,
+                                    demoFolderPath);
 
-                        // Check wallet unlock status
-                        if (
-                            revAddress != null &&
-                            privateKey != null &&
-                            !privateKey.trim().isEmpty()
-                        ) {
-                            PhysicalWalletManager walletManager =
-                                folderIntegration.getWalletManager();
-                            if (walletManager.isWalletUnlocked(revAddress)) {
-                                LOGGER.info(
-                                    "  ✓ Wallet {} is UNLOCKED with full access",
-                                    revAddress
-                                );
+                            // Check wallet unlock status
+                            if (revAddress != null &&
+                                    privateKey != null &&
+                                    !privateKey.trim().isEmpty()) {
+                                PhysicalWalletManager walletManager = folderIntegration.getWalletManager();
+                                if (walletManager.isWalletUnlocked(revAddress)) {
+                                    LOGGER.info(
+                                            "  ✓ Wallet {} is UNLOCKED with full access",
+                                            revAddress);
 
-                                // Demonstrate available operations
-                                try {
-                                    LOGGER.info("    Available operations:");
-                                    LOGGER.info(
-                                        "    - Create/modify/delete files and directories"
-                                    );
-                                    LOGGER.info("    - Update token balances");
-                                    LOGGER.info(
-                                        "    - Execute blockchain transactions"
-                                    );
-                                    LOGGER.info(
-                                        "    - Full read/write access to wallet contents"
-                                    );
+                                    // Demonstrate available operations
+                                    try {
+                                        LOGGER.info("    Available operations:");
+                                        LOGGER.info(
+                                                "    - Create/modify/delete files and directories");
+                                        LOGGER.info("    - Update token balances");
+                                        LOGGER.info(
+                                                "    - Execute blockchain transactions");
+                                        LOGGER.info(
+                                                "    - Full read/write access to wallet contents");
 
-                                    // Test a simple operation to verify unlocked status
-                                    folderIntegration.validateWalletOperation(
-                                        revAddress,
-                                        "create_file"
-                                    );
-                                    LOGGER.info(
-                                        "    ✓ Wallet operations validated - FULL ACCESS confirmed"
-                                    );
-                                    LOGGER.info(
-                                        "    ✓ SECURITY: ONLY this wallet {} can modify files",
-                                        revAddress
-                                    );
-                                    LOGGER.info(
-                                        "    ✓ This wallet folder has NO prefix (unlocked)"
-                                    );
-                                    LOGGER.info(
-                                        "    ✓ All other wallets have 'locked_' prefix (read-only)"
-                                    );
-                                } catch (IllegalStateException e) {
+                                        // Test a simple operation to verify unlocked status
+                                        folderIntegration.validateWalletOperation(
+                                                revAddress,
+                                                "create_file");
+                                        LOGGER.info(
+                                                "    ✓ Wallet operations validated - FULL ACCESS confirmed");
+                                        LOGGER.info(
+                                                "    ✓ SECURITY: ONLY this wallet {} can modify files",
+                                                revAddress);
+                                        LOGGER.info(
+                                                "    ✓ This wallet folder has NO prefix (unlocked)");
+                                        LOGGER.info(
+                                                "    ✓ All other wallets have 'locked_' prefix (read-only)");
+                                    } catch (IllegalStateException e) {
+                                        LOGGER.warn(
+                                                "    ✗ Unexpected access restriction: {}",
+                                                e.getMessage());
+                                    } catch (Exception e) {
+                                        LOGGER.debug(
+                                                "    Note: Operation validation requires wallet manager setup");
+                                    }
+                                } else {
                                     LOGGER.warn(
-                                        "    ✗ Unexpected access restriction: {}",
-                                        e.getMessage()
-                                    );
-                                } catch (Exception e) {
-                                    LOGGER.debug(
-                                        "    Note: Operation validation requires wallet manager setup"
-                                    );
+                                            "  ⚠ Wallet {} remains LOCKED - check private key",
+                                            revAddress);
+                                    LOGGER.warn(
+                                            "  ⚠ This wallet folder has 'locked_' prefix (read-only)");
+                                    LOGGER.warn(
+                                            "  ⚠ To unlock: provide correct private key (folder will lose 'locked_' prefix)");
+
+                                    // Show what's restricted for locked wallets
+                                    try {
+                                        LOGGER.info(
+                                                "    Restricted operations (wallet is locked):");
+                                        LOGGER.info(
+                                                "    ✗ Cannot create/modify/delete files");
+                                        LOGGER.info(
+                                                "    ✗ Cannot update token balances");
+                                        LOGGER.info(
+                                                "    ✗ Cannot execute blockchain transactions");
+                                        LOGGER.info(
+                                                "    ✓ Can read files and view wallet structure");
+
+                                        // Test that write operations are blocked
+                                        folderIntegration.validateWalletOperation(
+                                                revAddress,
+                                                "create_file");
+                                        LOGGER.warn(
+                                                "    Unexpected: Write operations should be blocked on locked wallet");
+                                    } catch (IllegalStateException e) {
+                                        LOGGER.info(
+                                                "    ✓ Write operations properly blocked: {}",
+                                                e.getMessage());
+                                    } catch (Exception e) {
+                                        LOGGER.debug(
+                                                "    Note: Operation validation requires wallet manager setup");
+                                    }
                                 }
                             } else {
-                                LOGGER.warn(
-                                    "  ⚠ Wallet {} remains LOCKED - check private key",
-                                    revAddress
-                                );
-                                LOGGER.warn(
-                                    "  ⚠ This wallet folder has 'locked_' prefix (read-only)"
-                                );
-                                LOGGER.warn(
-                                    "  ⚠ To unlock: provide correct private key (folder will lose 'locked_' prefix)"
-                                );
+                                LOGGER.info(
+                                        "  - All wallets created in LOCKED state");
+                                LOGGER.info(
+                                        "  - SECURITY ENFORCED: All wallets have 'locked_' prefix (read-only)");
+                                LOGGER.info(
+                                        "  - To unlock a specific wallet: restart with --rev-address <address> --private-key <key>");
+                                LOGGER.info(
+                                        "  - Only the unlocked wallet will have its 'locked_' prefix removed");
+                                LOGGER.info(
+                                        "  - All other wallets remain read-only with 'locked_' prefix");
+                            }
 
-                                // Show what's restricted for locked wallets
-                                try {
-                                    LOGGER.info(
-                                        "    Restricted operations (wallet is locked):"
-                                    );
-                                    LOGGER.info(
-                                        "    ✗ Cannot create/modify/delete files"
-                                    );
-                                    LOGGER.info(
-                                        "    ✗ Cannot update token balances"
-                                    );
-                                    LOGGER.info(
-                                        "    ✗ Cannot execute blockchain transactions"
-                                    );
-                                    LOGGER.info(
-                                        "    ✓ Can read files and view wallet structure"
-                                    );
-
-                                    // Test that write operations are blocked
-                                    folderIntegration.validateWalletOperation(
-                                        revAddress,
-                                        "create_file"
-                                    );
-                                    LOGGER.warn(
-                                        "    Unexpected: Write operations should be blocked on locked wallet"
-                                    );
-                                } catch (IllegalStateException e) {
-                                    LOGGER.info(
-                                        "    ✓ Write operations properly blocked: {}",
-                                        e.getMessage()
-                                    );
-                                } catch (Exception e) {
-                                    LOGGER.debug(
-                                        "    Note: Operation validation requires wallet manager setup"
-                                    );
-                                }
+                            if (result.failedOperations > 0) {
+                                LOGGER.warn(
+                                        "  - {} operations failed during wallet creation",
+                                        result.failedOperations);
                             }
                         } else {
-                            LOGGER.info(
-                                "  - All wallets created in LOCKED state"
-                            );
-                            LOGGER.info(
-                                "  - SECURITY ENFORCED: All wallets have 'locked_' prefix (read-only)"
-                            );
-                            LOGGER.info(
-                                "  - To unlock a specific wallet: restart with --rev-address <address> --private-key <key>"
-                            );
-                            LOGGER.info(
-                                "  - Only the unlocked wallet will have its 'locked_' prefix removed"
-                            );
-                            LOGGER.info(
-                                "  - All other wallets remain read-only with 'locked_' prefix"
-                            );
+                            LOGGER.error(
+                                    "✗ Physical wallet creation failed: {}",
+                                    result.errorMessage);
                         }
-
-                        if (result.failedOperations > 0) {
-                            LOGGER.warn(
-                                "  - {} operations failed during wallet creation",
-                                result.failedOperations
-                            );
-                        }
-                    } else {
+                    })
+                    .exceptionally(throwable -> {
                         LOGGER.error(
-                            "✗ Physical wallet creation failed: {}",
-                            result.errorMessage
-                        );
-                    }
-                })
-                .exceptionally(throwable -> {
-                    LOGGER.error(
-                        "Error during physical folder creation",
-                        throwable
-                    );
-                    return null;
-                });
+                                "Error during physical folder creation",
+                                throwable);
+                        return null;
+                    });
 
             // Start continuous monitoring if interval > 0
             if (tokenDiscoveryInterval > 0) {
                 if (revAddress != null && !revAddress.trim().isEmpty()) {
                     LOGGER.info(
-                        "Setting up continuous physical wallet monitoring for {} every {} minutes",
-                        revAddress,
-                        tokenDiscoveryInterval
-                    );
+                            "Setting up continuous physical wallet monitoring for {} every {} minutes",
+                            revAddress,
+                            tokenDiscoveryInterval);
                     folderIntegration.startContinuousMonitoringForWallet(
-                        revAddress,
-                        tokenDiscoveryInterval
-                    );
+                            revAddress,
+                            tokenDiscoveryInterval);
                 } else {
                     LOGGER.info(
-                        "Setting up continuous physical wallet monitoring for all wallets every {} minutes",
-                        tokenDiscoveryInterval
-                    );
+                            "Setting up continuous physical wallet monitoring for all wallets every {} minutes",
+                            tokenDiscoveryInterval);
                     folderIntegration.startContinuousMonitoring(
-                        tokenDiscoveryInterval
-                    );
+                            tokenDiscoveryInterval);
                 }
             } else {
                 LOGGER.info(
-                    "Continuous wallet monitoring disabled (interval = 0)"
-                );
+                        "Continuous wallet monitoring disabled (interval = 0)");
             }
 
             // Set timeout for initial discovery to avoid blocking startup
@@ -1186,9 +1033,8 @@ class F1r3DriveCli implements Callable<Integer> {
                 discoveryFuture.get(30, TimeUnit.SECONDS);
             } catch (Exception e) {
                 LOGGER.warn(
-                    "Initial token discovery taking longer than expected, continuing in background...",
-                    e
-                );
+                        "Initial token discovery taking longer than expected, continuing in background...",
+                        e);
             }
         } catch (Exception e) {
             LOGGER.error("Failed to start physical folder creation system", e);

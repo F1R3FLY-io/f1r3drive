@@ -13,7 +13,8 @@ import org.mockito.MockitoAnnotations;
 
 /**
  * Unit tests for F1r3DriveChangeListener.
- * Tests the integration between platform file events and F1r3Drive internal systems.
+ * Tests the integration between platform file events and F1r3Drive internal
+ * systems.
  */
 class F1r3DriveChangeListenerTest {
 
@@ -28,7 +29,7 @@ class F1r3DriveChangeListenerTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        changeListener = new F1r3DriveChangeListener(mockFileSystem, mockPlaceholderManager);
+        changeListener = new F1r3DriveChangeListener(mockFileSystem, mockPlaceholderManager, "/tmp/f1r3drive");
     }
 
     @Test
