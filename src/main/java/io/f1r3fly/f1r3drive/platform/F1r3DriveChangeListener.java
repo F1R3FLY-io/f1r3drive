@@ -65,8 +65,48 @@ public class F1r3DriveChangeListener implements ChangeListener {
         return absolutePath;
     }
 
+    /**
+     * Checks if the file path should be ignored.
+     * Use this to filter out system files, temporary files, and other noise.
+     */
+    private boolean shouldIgnore(String path) {
+        if (path == null) {
+            return true;
+        }
+
+        // Get just the filename
+        String fileName = Paths.get(path).getFileName().toString();
+
+        // System files
+        if (fileName.equals(".DS_Store"))
+            return true;
+        if (fileName.equals(".Trash"))
+            return true;
+        if (fileName.equals(".Trashes"))
+            return true;
+
+        // AppleDouble / Resource fork files
+        if (fileName.startsWith("._"))
+            return true;
+
+        // Sync temporary files (iCloud, etc.)
+        if (fileName.contains(".nosync"))
+            return true;
+
+        // Office temporary files
+        if (fileName.startsWith("~$"))
+            return true;
+
+        return false;
+    }
+
     @Override
     public void onFileCreated(String path) {
+        if (shouldIgnore(path)) {
+            LOGGER.debug("CHANGE_LISTENER_IGNORE: Ignoring created file: {}", path);
+            return;
+        }
+
         LOGGER.info("CHANGE_LISTENER_CREATE: File created - {}", path);
         try {
             String relativePath = resolveRelativePath(path);
@@ -113,6 +153,11 @@ public class F1r3DriveChangeListener implements ChangeListener {
 
     @Override
     public void onFileModified(String path) {
+        if (shouldIgnore(path)) {
+            LOGGER.debug("CHANGE_LISTENER_IGNORE: Ignoring modified file: {}", path);
+            return;
+        }
+
         LOGGER.info("CHANGE_LISTENER_MODIFY: File modified - {}", path);
         try {
             String relativePath = resolveRelativePath(path);
@@ -145,6 +190,11 @@ public class F1r3DriveChangeListener implements ChangeListener {
 
     @Override
     public void onFileDeleted(String path) {
+        if (shouldIgnore(path)) {
+            LOGGER.debug("CHANGE_LISTENER_IGNORE: Ignoring deleted file: {}", path);
+            return;
+        }
+
         LOGGER.info("CHANGE_LISTENER_DELETE: File deleted - {}", path);
         try {
             String relativePath = resolveRelativePath(path);
@@ -177,6 +227,15 @@ public class F1r3DriveChangeListener implements ChangeListener {
 
     @Override
     public void onFileMoved(String oldPath, String newPath) {
+        // If either old or new path is ignored, we treat it with caution
+        // But mainly if the NEW path is ignored, we shouldn't create it in blockchain
+        // If OLD path was ignored, it likely wasn't in blockchain anyway
+
+        if (shouldIgnore(newPath)) {
+            LOGGER.debug("CHANGE_LISTENER_IGNORE: Ignoring move to ignored path: {}", newPath);
+            return;
+        }
+
         LOGGER.info(
                 "CHANGE_LISTENER_MOVE: File moved - {} -> {}",
                 oldPath,
@@ -211,6 +270,10 @@ public class F1r3DriveChangeListener implements ChangeListener {
 
     @Override
     public void onFileAccessed(String path) {
+        if (shouldIgnore(path)) {
+            return;
+        }
+
         LOGGER.debug("CHANGE_LISTENER_ACCESS: File accessed - {}", path);
         try {
             // If it's a placeholder file, trigger loading
@@ -232,6 +295,10 @@ public class F1r3DriveChangeListener implements ChangeListener {
 
     @Override
     public void onFileAttributesChanged(String path) {
+        if (shouldIgnore(path)) {
+            return;
+        }
+
         LOGGER.debug(
                 "CHANGE_LISTENER_ATTRIBUTES: File attributes changed - {}",
                 path);
