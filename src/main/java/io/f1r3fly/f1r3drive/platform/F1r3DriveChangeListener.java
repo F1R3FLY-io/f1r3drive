@@ -97,6 +97,10 @@ public class F1r3DriveChangeListener implements ChangeListener {
         if (fileName.startsWith("~$"))
             return true;
 
+        // Ignore .tokens directory and its contents
+        if (path.contains("/.tokens/") || fileName.equals(".tokens"))
+            return true;
+
         return false;
     }
 

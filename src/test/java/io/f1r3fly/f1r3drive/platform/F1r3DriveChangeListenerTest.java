@@ -284,4 +284,17 @@ class F1r3DriveChangeListenerTest {
         // When - should not throw exception despite internal error
         assertDoesNotThrow(() -> changeListener.onFileAccessed(testPath));
     }
+
+    @Test
+    void testOnFileCreated_IgnoredFile() {
+        // Given
+        String testPath = "/test/.tokens/file.txt";
+
+        // When
+        changeListener.onFileCreated(testPath);
+
+        // Then
+        verifyNoInteractions(mockPlaceholderManager);
+        verifyNoInteractions(mockFileSystem);
+    }
 }
