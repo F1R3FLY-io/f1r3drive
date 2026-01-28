@@ -15,16 +15,14 @@ import org.slf4j.LoggerFactory;
 public class LockedPhysicalWallet extends PhysicalWallet {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(
-        LockedPhysicalWallet.class
-    );
+            LockedPhysicalWallet.class);
 
     private static final String LOCKED_STATUS_FILE = ".locked";
 
     public LockedPhysicalWallet(
-        BlockchainContext blockchainContext,
-        Path walletPath,
-        String baseDirectory
-    ) {
+            BlockchainContext blockchainContext,
+            Path walletPath,
+            String baseDirectory) {
         super(blockchainContext, walletPath, baseDirectory);
     }
 
@@ -36,9 +34,8 @@ public class LockedPhysicalWallet extends PhysicalWallet {
     @Override
     public void createFolderStructure() throws IOException {
         LOGGER.info(
-            "Creating locked wallet folder structure for: {}",
-            getRevAddress()
-        );
+                "Creating locked wallet folder structure for: {}",
+                getRevAddress());
 
         // Create basic folder structure
         createBasicFolderStructure();
@@ -47,8 +44,8 @@ public class LockedPhysicalWallet extends PhysicalWallet {
         createLockedStatusFile();
 
         // Create limited content for locked wallet
-        createLockedTokensDirectory();
-        createLockedFoldersDirectory();
+        // createLockedTokensDirectory();
+        // createLockedFoldersDirectory();
 
         LOGGER.info("Locked wallet folder structure created: {}", walletPath);
     }
@@ -60,37 +57,35 @@ public class LockedPhysicalWallet extends PhysicalWallet {
         Path lockedPath = walletPath.resolve(LOCKED_STATUS_FILE);
 
         String lockedContent = String.format(
-            """
-            WALLET STATUS: LOCKED
+                """
+                        WALLET STATUS: LOCKED
 
-            This wallet is currently locked and requires a private key to access.
+                        This wallet is currently locked and requires a private key to access.
 
-            Wallet Address: %s
-            Access Level: READ-ONLY
+                        Wallet Address: %s
+                        Access Level: READ-ONLY
 
-            To unlock this wallet, provide the private key using:
-            --private-key <private_key>
+                        To unlock this wallet, provide the private key using:
+                        --private-key <private_key>
 
-            Available operations:
-            - View wallet address
-            - View basic folder structure
-            - View README information
+                        Available operations:
+                        - View wallet address
+                        - View basic folder structure
+                        - View README information
 
-            Restricted operations (require unlock):
-            - Access token balances
-            - Read/write blockchain files
-            - Create/modify folders
-            - Execute transactions
-            """,
-            getRevAddress()
-        );
+                        Restricted operations (require unlock):
+                        - Access token balances
+                        - Read/write blockchain files
+                        - Create/modify folders
+                        - Execute transactions
+                        """,
+                getRevAddress());
 
         Files.write(
-            lockedPath,
-            lockedContent.getBytes(),
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING
-        );
+                lockedPath,
+                lockedContent.getBytes(),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
 
         LOGGER.debug("Created locked status file: {}", lockedPath);
     }
@@ -104,30 +99,28 @@ public class LockedPhysicalWallet extends PhysicalWallet {
         // Create info file explaining locked state
         Path tokenInfoPath = tokensDir.resolve("README.txt");
         String tokenInfo = String.format(
-            """
-            TOKENS DIRECTORY - LOCKED WALLET
+                """
+                        TOKENS DIRECTORY - LOCKED WALLET
 
-            This directory will contain token files when the wallet is unlocked.
+                        This directory will contain token files when the wallet is unlocked.
 
-            Wallet Address: %s
-            Status: LOCKED
+                        Wallet Address: %s
+                        Status: LOCKED
 
-            To view actual token balances, unlock the wallet with:
-            --private-key <your_private_key>
+                        To view actual token balances, unlock the wallet with:
+                        --private-key <your_private_key>
 
-            Expected contents after unlock:
-            - REV.token (REV balance file)
-            - Additional token files for owned tokens
-            """,
-            getRevAddress()
-        );
+                        Expected contents after unlock:
+                        - REV.token (REV balance file)
+                        - Additional token files for owned tokens
+                        """,
+                getRevAddress());
 
         Files.write(
-            tokenInfoPath,
-            tokenInfo.getBytes(),
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING
-        );
+                tokenInfoPath,
+                tokenInfo.getBytes(),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
 
         LOGGER.debug("Created locked tokens directory info: {}", tokenInfoPath);
     }
@@ -141,36 +134,33 @@ public class LockedPhysicalWallet extends PhysicalWallet {
         // Create info file explaining locked state
         Path folderInfoPath = foldersDir.resolve("README.txt");
         String folderInfo = String.format(
-            """
-            FOLDERS DIRECTORY - LOCKED WALLET
+                """
+                        FOLDERS DIRECTORY - LOCKED WALLET
 
-            This directory will contain sub-folders when the wallet is unlocked.
+                        This directory will contain sub-folders when the wallet is unlocked.
 
-            Wallet Address: %s
-            Status: LOCKED
+                        Wallet Address: %s
+                        Status: LOCKED
 
-            To access actual folders and their contents, unlock the wallet with:
-            --private-key <your_private_key>
+                        To access actual folders and their contents, unlock the wallet with:
+                        --private-key <your_private_key>
 
-            Expected contents after unlock:
-            - Blockchain-based folder structure
-            - Files and documents stored in folders
-            - Folder permissions and metadata
-            """,
-            getRevAddress()
-        );
+                        Expected contents after unlock:
+                        - Blockchain-based folder structure
+                        - Files and documents stored in folders
+                        - Folder permissions and metadata
+                        """,
+                getRevAddress());
 
         Files.write(
-            folderInfoPath,
-            folderInfo.getBytes(),
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING
-        );
+                folderInfoPath,
+                folderInfo.getBytes(),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
 
         LOGGER.debug(
-            "Created locked folders directory info: {}",
-            folderInfoPath
-        );
+                "Created locked folders directory info: {}",
+                folderInfoPath);
     }
 
     /**
@@ -184,10 +174,9 @@ public class LockedPhysicalWallet extends PhysicalWallet {
             return privateKey != null && !privateKey.trim().isEmpty();
         } catch (Exception e) {
             LOGGER.warn(
-                "Error validating private key for wallet: {}",
-                getRevAddress(),
-                e
-            );
+                    "Error validating private key for wallet: {}",
+                    getRevAddress(),
+                    e);
             return false;
         }
     }
@@ -197,11 +186,10 @@ public class LockedPhysicalWallet extends PhysicalWallet {
      */
     public WalletInfo getPublicInfo() {
         return new WalletInfo(
-            getRevAddress(),
-            getWalletStatus(),
-            walletPath.toString(),
-            exists()
-        );
+                getRevAddress(),
+                getWalletStatus(),
+                walletPath.toString(),
+                exists());
     }
 
     @Override
@@ -215,7 +203,7 @@ public class LockedPhysicalWallet extends PhysicalWallet {
      * Prevents any write operations on locked wallets - files cannot be created
      */
     public void createFile(String relativePath, byte[] content)
-        throws IllegalStateException {
+            throws IllegalStateException {
         requireUnlocked();
     }
 
@@ -223,7 +211,7 @@ public class LockedPhysicalWallet extends PhysicalWallet {
      * Prevents any write operations on locked wallets - files cannot be modified
      */
     public void writeFile(String relativePath, byte[] content)
-        throws IllegalStateException {
+            throws IllegalStateException {
         requireUnlocked();
     }
 
@@ -235,19 +223,21 @@ public class LockedPhysicalWallet extends PhysicalWallet {
     }
 
     /**
-     * Prevents any write operations on locked wallets - directories cannot be created
+     * Prevents any write operations on locked wallets - directories cannot be
+     * created
      */
     @Override
     public void createDirectory(String relativePath)
-        throws IOException, IllegalStateException {
+            throws IOException, IllegalStateException {
         requireUnlocked();
     }
 
     /**
-     * Prevents any write operations on locked wallets - directories cannot be deleted
+     * Prevents any write operations on locked wallets - directories cannot be
+     * deleted
      */
     public void deleteDirectory(String relativePath)
-        throws IllegalStateException {
+            throws IllegalStateException {
         requireUnlocked();
     }
 
@@ -255,15 +245,16 @@ public class LockedPhysicalWallet extends PhysicalWallet {
      * Prevents any write operations on locked wallets - files cannot be renamed
      */
     public void renameFile(String oldPath, String newPath)
-        throws IllegalStateException {
+            throws IllegalStateException {
         requireUnlocked();
     }
 
     /**
-     * Prevents any write operations on locked wallets - directories cannot be renamed
+     * Prevents any write operations on locked wallets - directories cannot be
+     * renamed
      */
     public void renameDirectory(String oldPath, String newPath)
-        throws IllegalStateException {
+            throws IllegalStateException {
         requireUnlocked();
     }
 
@@ -280,8 +271,7 @@ public class LockedPhysicalWallet extends PhysicalWallet {
 
         if (Files.isDirectory(filePath)) {
             throw new IOException(
-                "Path is a directory, not a file: " + relativePath
-            );
+                    "Path is a directory, not a file: " + relativePath);
         }
 
         return Files.readAllBytes(filePath);
@@ -293,8 +283,7 @@ public class LockedPhysicalWallet extends PhysicalWallet {
     public String[] listDirectory(String relativePath) throws IOException {
         requireReadAccess();
         java.nio.file.Path dirPath = walletPath.resolve(
-            relativePath.isEmpty() ? "." : relativePath
-        );
+                relativePath.isEmpty() ? "." : relativePath);
 
         if (!Files.exists(dirPath)) {
             throw new IOException("Directory not found: " + relativePath);
@@ -306,8 +295,8 @@ public class LockedPhysicalWallet extends PhysicalWallet {
 
         try (var stream = Files.list(dirPath)) {
             return stream
-                .map(path -> path.getFileName().toString())
-                .toArray(String[]::new);
+                    .map(path -> path.getFileName().toString())
+                    .toArray(String[]::new);
         }
     }
 
@@ -320,7 +309,8 @@ public class LockedPhysicalWallet extends PhysicalWallet {
     }
 
     /**
-     * Read operations are allowed on locked wallets - can check if path is directory
+     * Read operations are allowed on locked wallets - can check if path is
+     * directory
      */
     public boolean isDirectory(String relativePath) {
         requireReadAccess();
@@ -331,7 +321,7 @@ public class LockedPhysicalWallet extends PhysicalWallet {
      * Prevents token operations on locked wallets
      */
     public void updateTokenBalance(String tokenName, long balance)
-        throws IllegalStateException {
+            throws IllegalStateException {
         requireUnlocked();
     }
 
@@ -339,7 +329,7 @@ public class LockedPhysicalWallet extends PhysicalWallet {
      * Prevents blockchain operations on locked wallets
      */
     public void executeBlockchainTransaction(String transactionData)
-        throws IllegalStateException {
+            throws IllegalStateException {
         requireUnlocked();
     }
 
@@ -354,11 +344,10 @@ public class LockedPhysicalWallet extends PhysicalWallet {
         private final boolean exists;
 
         public WalletInfo(
-            String address,
-            String status,
-            String path,
-            boolean exists
-        ) {
+                String address,
+                String status,
+                String path,
+                boolean exists) {
             this.address = address;
             this.status = status;
             this.path = path;
@@ -384,12 +373,11 @@ public class LockedPhysicalWallet extends PhysicalWallet {
         @Override
         public String toString() {
             return String.format(
-                "WalletInfo{address=%s, status=%s, path=%s, exists=%s}",
-                address,
-                status,
-                path,
-                exists
-            );
+                    "WalletInfo{address=%s, status=%s, path=%s, exists=%s}",
+                    address,
+                    status,
+                    path,
+                    exists);
         }
     }
 }

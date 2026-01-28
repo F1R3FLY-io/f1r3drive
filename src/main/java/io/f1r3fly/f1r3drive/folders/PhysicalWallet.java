@@ -72,14 +72,14 @@ public abstract class PhysicalWallet implements WalletOperations {
 
         // Create subdirectories
         createSubDirectory(TOKENS_DIR);
-        createSubDirectory(FOLDERS_DIR);
-        createSubDirectory(BLOCKCHAIN_FILES_DIR);
+        // createSubDirectory(FOLDERS_DIR);
+        // createSubDirectory(BLOCKCHAIN_FILES_DIR);
 
         // Create wallet info file
         createWalletInfoFile();
 
         // Create README file
-        createReadmeFile();
+        // createReadmeFile();
     }
 
     /**

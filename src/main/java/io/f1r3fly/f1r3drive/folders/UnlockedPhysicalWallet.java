@@ -10,22 +10,21 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Represents an unlocked physical wallet folder on disk.
- * Unlocked wallets have full access to tokens, files, and blockchain operations.
+ * Unlocked wallets have full access to tokens, files, and blockchain
+ * operations.
  */
 public class UnlockedPhysicalWallet extends PhysicalWallet {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(
-        UnlockedPhysicalWallet.class
-    );
+            UnlockedPhysicalWallet.class);
 
     private static final String UNLOCKED_STATUS_FILE = ".unlocked";
     private static final String PRIVATE_KEY_HASH_FILE = ".key_hash";
 
     public UnlockedPhysicalWallet(
-        BlockchainContext blockchainContext,
-        Path walletPath,
-        String baseDirectory
-    ) {
+            BlockchainContext blockchainContext,
+            Path walletPath,
+            String baseDirectory) {
         super(blockchainContext, walletPath, baseDirectory);
     }
 
@@ -37,9 +36,8 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
     @Override
     public void createFolderStructure() throws IOException {
         LOGGER.info(
-            "Creating unlocked wallet folder structure for: {}",
-            getRevAddress()
-        );
+                "Creating unlocked wallet folder structure for: {}",
+                getRevAddress());
 
         // Create basic folder structure
         createBasicFolderStructure();
@@ -55,9 +53,8 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
      */
     public void createUnlockedStructure() throws IOException {
         LOGGER.info(
-            "Transforming to unlocked wallet structure: {}",
-            getRevAddress()
-        );
+                "Transforming to unlocked wallet structure: {}",
+                getRevAddress());
 
         // Remove locked status file if it exists
         removeLockStatusFiles();
@@ -72,10 +69,10 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
         initializeTokensDirectory();
 
         // Initialize folders directory with access
-        initializeFoldersDirectory();
+        // initializeFoldersDirectory();
 
         // Initialize blockchain files directory
-        initializeBlockchainFilesDirectory();
+        // initializeBlockchainFilesDirectory();
 
         LOGGER.info("Wallet unlocked successfully: {}", walletPath);
     }
@@ -119,38 +116,36 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
         Path unlockedPath = walletPath.resolve(UNLOCKED_STATUS_FILE);
 
         String unlockedContent = String.format(
-            """
-            WALLET STATUS: UNLOCKED
+                """
+                        WALLET STATUS: UNLOCKED
 
-            This wallet is unlocked and has full access to blockchain operations.
+                        This wallet is unlocked and has full access to blockchain operations.
 
-            Wallet Address: %s
-            Access Level: FULL ACCESS
+                        Wallet Address: %s
+                        Access Level: FULL ACCESS
 
-            Available operations:
-            - View and update token balances
-            - Read/write blockchain files
-            - Create/modify/delete folders
-            - Execute blockchain transactions
-            - Access private wallet data
+                        Available operations:
+                        - View and update token balances
+                        - Read/write blockchain files
+                        - Create/modify/delete folders
+                        - Execute blockchain transactions
+                        - Access private wallet data
 
-            Security:
-            - Private key validated and authenticated
-            - Cryptographic signatures enabled
-            - Full blockchain interaction available
+                        Security:
+                        - Private key validated and authenticated
+                        - Cryptographic signatures enabled
+                        - Full blockchain interaction available
 
-            Warning: Keep this wallet secure. Anyone with access to this folder
-            can perform operations on behalf of this wallet address.
-            """,
-            getRevAddress()
-        );
+                        Warning: Keep this wallet secure. Anyone with access to this folder
+                        can perform operations on behalf of this wallet address.
+                        """,
+                getRevAddress());
 
         Files.write(
-            unlockedPath,
-            unlockedContent.getBytes(),
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING
-        );
+                unlockedPath,
+                unlockedContent.getBytes(),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
 
         LOGGER.debug("Created unlocked status file: {}", unlockedPath);
     }
@@ -165,26 +160,24 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
         String keyHash = generateKeyHash(signingKey);
 
         String hashContent = String.format(
-            """
-            # Private Key Hash
-            # This file contains a hash of the private key used to unlock this wallet
-            # It is used for validation and security purposes
+                """
+                        # Private Key Hash
+                        # This file contains a hash of the private key used to unlock this wallet
+                        # It is used for validation and security purposes
 
-            wallet.address=%s
-            key.hash=%s
-            unlock.timestamp=%s
-            """,
-            getRevAddress(),
-            keyHash,
-            java.time.Instant.now().toString()
-        );
+                        wallet.address=%s
+                        key.hash=%s
+                        unlock.timestamp=%s
+                        """,
+                getRevAddress(),
+                keyHash,
+                java.time.Instant.now().toString());
 
         Files.write(
-            keyHashPath,
-            hashContent.getBytes(),
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING
-        );
+                keyHashPath,
+                hashContent.getBytes(),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
 
         LOGGER.debug("Created private key hash file: {}", keyHashPath);
     }
@@ -194,8 +187,7 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
      */
     private String generateKeyHash(byte[] signingKey) {
         try {
-            java.security.MessageDigest digest =
-                java.security.MessageDigest.getInstance("SHA-256");
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(signingKey);
             return java.util.Base64.getEncoder().encodeToString(hash);
         } catch (Exception e) {
@@ -213,31 +205,29 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
         // Create tokens access file
         Path tokensAccessPath = tokensDir.resolve("ACCESS_ENABLED.txt");
         String tokensContent = String.format(
-            """
-            TOKENS DIRECTORY - UNLOCKED WALLET
+                """
+                        TOKENS DIRECTORY - UNLOCKED WALLET
 
-            This directory contains token files with real blockchain balances.
+                        This directory contains token files with real blockchain balances.
 
-            Wallet Address: %s
-            Status: UNLOCKED
-            Access: FULL
+                        Wallet Address: %s
+                        Status: UNLOCKED
+                        Access: FULL
 
-            Contents:
-            - Token balance files (JSON format)
-            - Real-time balance updates from blockchain
-            - Transaction history files
+                        Contents:
+                        - Token balance files (JSON format)
+                        - Real-time balance updates from blockchain
+                        - Transaction history files
 
-            Note: Token files are automatically updated when blockchain state changes.
-            """,
-            getRevAddress()
-        );
+                        Note: Token files are automatically updated when blockchain state changes.
+                        """,
+                getRevAddress());
 
         Files.write(
-            tokensAccessPath,
-            tokensContent.getBytes(),
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING
-        );
+                tokensAccessPath,
+                tokensContent.getBytes(),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
 
         LOGGER.debug("Initialized unlocked tokens directory: {}", tokensDir);
     }
@@ -251,32 +241,30 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
         // Create folders access file
         Path foldersAccessPath = foldersDir.resolve("ACCESS_ENABLED.txt");
         String foldersContent = String.format(
-            """
-            FOLDERS DIRECTORY - UNLOCKED WALLET
+                """
+                        FOLDERS DIRECTORY - UNLOCKED WALLET
 
-            This directory contains blockchain-based folder structure.
+                        This directory contains blockchain-based folder structure.
 
-            Wallet Address: %s
-            Status: UNLOCKED
-            Access: FULL
+                        Wallet Address: %s
+                        Status: UNLOCKED
+                        Access: FULL
 
-            Contents:
-            - Sub-folders from blockchain folder tokens
-            - Files and documents stored in folders
-            - Folder permissions and metadata
-            - Real-time synchronization with blockchain
+                        Contents:
+                        - Sub-folders from blockchain folder tokens
+                        - Files and documents stored in folders
+                        - Folder permissions and metadata
+                        - Real-time synchronization with blockchain
 
-            Note: Folder structure is synchronized with blockchain state.
-            """,
-            getRevAddress()
-        );
+                        Note: Folder structure is synchronized with blockchain state.
+                        """,
+                getRevAddress());
 
         Files.write(
-            foldersAccessPath,
-            foldersContent.getBytes(),
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING
-        );
+                foldersAccessPath,
+                foldersContent.getBytes(),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
 
         LOGGER.debug("Initialized unlocked folders directory: {}", foldersDir);
     }
@@ -290,39 +278,36 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
         // Create blockchain files access file
         Path bcFilesAccessPath = blockchainDir.resolve("ACCESS_ENABLED.txt");
         String bcFilesContent = String.format(
-            """
-            BLOCKCHAIN FILES DIRECTORY - UNLOCKED WALLET
+                """
+                        BLOCKCHAIN FILES DIRECTORY - UNLOCKED WALLET
 
-            This directory contains files stored directly on the blockchain.
+                        This directory contains files stored directly on the blockchain.
 
-            Wallet Address: %s
-            Status: UNLOCKED
-            Access: FULL
+                        Wallet Address: %s
+                        Status: UNLOCKED
+                        Access: FULL
 
-            Contents:
-            - Files downloaded from blockchain storage
-            - File metadata and version history
-            - Synchronization status information
+                        Contents:
+                        - Files downloaded from blockchain storage
+                        - File metadata and version history
+                        - Synchronization status information
 
-            Note: Files are downloaded from blockchain and kept in sync.
-            """,
-            getRevAddress()
-        );
+                        Note: Files are downloaded from blockchain and kept in sync.
+                        """,
+                getRevAddress());
 
         Files.write(
-            bcFilesAccessPath,
-            bcFilesContent.getBytes(),
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING
-        );
+                bcFilesAccessPath,
+                bcFilesContent.getBytes(),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
 
         // Create metadata subdirectory
         createSubDirectory("metadata").resolve("blockchain_files");
 
         LOGGER.debug(
-            "Initialized blockchain files directory: {}",
-            blockchainDir
-        );
+                "Initialized blockchain files directory: {}",
+                blockchainDir);
     }
 
     /**
@@ -358,10 +343,9 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
             return validateKeyHash();
         } catch (Exception e) {
             LOGGER.warn(
-                "Error validating unlock state for wallet: {}",
-                getRevAddress(),
-                e
-            );
+                    "Error validating unlock state for wallet: {}",
+                    getRevAddress(),
+                    e);
             return false;
         }
     }
@@ -382,10 +366,9 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
             return fileContent.contains("key.hash=" + expectedHash);
         } catch (Exception e) {
             LOGGER.warn(
-                "Error validating key hash for wallet: {}",
-                getRevAddress(),
-                e
-            );
+                    "Error validating key hash for wallet: {}",
+                    getRevAddress(),
+                    e);
             return false;
         }
     }
@@ -394,7 +377,7 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
      * Full access file operations for unlocked wallets - can create files
      */
     public void createFile(String relativePath, byte[] content)
-        throws IOException {
+            throws IOException {
         requireReadAccess(); // Unlocked wallets have full access
         java.nio.file.Path filePath = walletPath.resolve(relativePath);
 
@@ -405,11 +388,10 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
         }
 
         Files.write(
-            filePath,
-            content,
-            java.nio.file.StandardOpenOption.CREATE,
-            java.nio.file.StandardOpenOption.TRUNCATE_EXISTING
-        );
+                filePath,
+                content,
+                java.nio.file.StandardOpenOption.CREATE,
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
 
         LOGGER.debug("Created file in unlocked wallet: {}", relativePath);
     }
@@ -418,7 +400,7 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
      * Full access file operations for unlocked wallets - can write to files
      */
     public void writeFile(String relativePath, byte[] content)
-        throws IOException {
+            throws IOException {
         requireReadAccess(); // Unlocked wallets have full access
         java.nio.file.Path filePath = walletPath.resolve(relativePath);
 
@@ -427,10 +409,9 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
         }
 
         Files.write(
-            filePath,
-            content,
-            java.nio.file.StandardOpenOption.TRUNCATE_EXISTING
-        );
+                filePath,
+                content,
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
 
         LOGGER.debug("Modified file in unlocked wallet: {}", relativePath);
     }
@@ -448,8 +429,7 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
 
         if (Files.isDirectory(filePath)) {
             throw new IOException(
-                "Path is a directory, not a file: " + relativePath
-            );
+                    "Path is a directory, not a file: " + relativePath);
         }
 
         Files.delete(filePath);
@@ -457,10 +437,11 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
     }
 
     /**
-     * Full access directory operations for unlocked wallets - can create directories
+     * Full access directory operations for unlocked wallets - can create
+     * directories
      */
     public void createDirectory(String relativePath)
-        throws IOException, IllegalStateException {
+            throws IOException, IllegalStateException {
         requireReadAccess(); // Unlocked wallets have full access
         java.nio.file.Path dirPath = walletPath.resolve(relativePath);
 
@@ -469,7 +450,8 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
     }
 
     /**
-     * Full access directory operations for unlocked wallets - can delete directories
+     * Full access directory operations for unlocked wallets - can delete
+     * directories
      */
     public void deleteDirectory(String relativePath) throws IOException {
         requireReadAccess(); // Unlocked wallets have full access
@@ -486,20 +468,19 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
         // Delete directory and all contents recursively
         try (var stream = Files.walk(dirPath)) {
             stream
-                .sorted(java.util.Comparator.reverseOrder())
-                .forEach(path -> {
-                    try {
-                        Files.delete(path);
-                    } catch (IOException e) {
-                        LOGGER.warn("Could not delete path: {}", path, e);
-                    }
-                });
+                    .sorted(java.util.Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.delete(path);
+                        } catch (IOException e) {
+                            LOGGER.warn("Could not delete path: {}", path, e);
+                        }
+                    });
         }
 
         LOGGER.debug(
-            "Deleted directory from unlocked wallet: {}",
-            relativePath
-        );
+                "Deleted directory from unlocked wallet: {}",
+                relativePath);
     }
 
     /**
@@ -522,17 +503,16 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
 
         Files.move(oldFilePath, newFilePath);
         LOGGER.debug(
-            "Renamed file in unlocked wallet: {} -> {}",
-            oldPath,
-            newPath
-        );
+                "Renamed file in unlocked wallet: {} -> {}",
+                oldPath,
+                newPath);
     }
 
     /**
      * Full access operations for unlocked wallets - can rename directories
      */
     public void renameDirectory(String oldPath, String newPath)
-        throws IOException {
+            throws IOException {
         requireReadAccess(); // Unlocked wallets have full access
         java.nio.file.Path oldDirPath = walletPath.resolve(oldPath);
         java.nio.file.Path newDirPath = walletPath.resolve(newPath);
@@ -553,10 +533,9 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
 
         Files.move(oldDirPath, newDirPath);
         LOGGER.debug(
-            "Renamed directory in unlocked wallet: {} -> {}",
-            oldPath,
-            newPath
-        );
+                "Renamed directory in unlocked wallet: {} -> {}",
+                oldPath,
+                newPath);
     }
 
     /**
@@ -572,8 +551,7 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
 
         if (Files.isDirectory(filePath)) {
             throw new IOException(
-                "Path is a directory, not a file: " + relativePath
-            );
+                    "Path is a directory, not a file: " + relativePath);
         }
 
         return Files.readAllBytes(filePath);
@@ -585,8 +563,7 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
     public String[] listDirectory(String relativePath) throws IOException {
         requireReadAccess();
         java.nio.file.Path dirPath = walletPath.resolve(
-            relativePath.isEmpty() ? "." : relativePath
-        );
+                relativePath.isEmpty() ? "." : relativePath);
 
         if (!Files.exists(dirPath)) {
             throw new IOException("Directory not found: " + relativePath);
@@ -598,8 +575,8 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
 
         try (var stream = Files.list(dirPath)) {
             return stream
-                .map(path -> path.getFileName().toString())
-                .toArray(String[]::new);
+                    .map(path -> path.getFileName().toString())
+                    .toArray(String[]::new);
         }
     }
 
@@ -612,7 +589,8 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
     }
 
     /**
-     * Read operations are allowed on unlocked wallets - can check if path is directory
+     * Read operations are allowed on unlocked wallets - can check if path is
+     * directory
      */
     public boolean isDirectory(String relativePath) {
         requireReadAccess();
@@ -623,33 +601,30 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
      * Full access token operations for unlocked wallets
      */
     public void updateTokenBalance(String tokenName, long balance)
-        throws IOException {
+            throws IOException {
         requireReadAccess(); // Unlocked wallets have full access
         java.nio.file.Path tokenFile = getTokensDirectory().resolve(
-            tokenName + ".token"
-        );
+                tokenName + ".token");
 
         String tokenContent = String.format(
-            """
-            {
-                "tokenName": "%s",
-                "balance": %d,
-                "walletAddress": "%s",
-                "lastUpdated": "%s"
-            }
-            """,
-            tokenName,
-            balance,
-            getRevAddress(),
-            java.time.Instant.now()
-        );
+                """
+                        {
+                            "tokenName": "%s",
+                            "balance": %d,
+                            "walletAddress": "%s",
+                            "lastUpdated": "%s"
+                        }
+                        """,
+                tokenName,
+                balance,
+                getRevAddress(),
+                java.time.Instant.now());
 
         Files.write(
-            tokenFile,
-            tokenContent.getBytes(),
-            java.nio.file.StandardOpenOption.CREATE,
-            java.nio.file.StandardOpenOption.TRUNCATE_EXISTING
-        );
+                tokenFile,
+                tokenContent.getBytes(),
+                java.nio.file.StandardOpenOption.CREATE,
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
 
         LOGGER.debug("Updated token balance for {}: {}", tokenName, balance);
     }
@@ -664,24 +639,21 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
             // This would integrate with the blockchain context to execute transactions
             // For now, just log the transaction attempt
             LOGGER.info(
-                "Executing blockchain transaction for wallet {}: {}",
-                getRevAddress(),
-                transactionData
-            );
+                    "Executing blockchain transaction for wallet {}: {}",
+                    getRevAddress(),
+                    transactionData);
 
             // TODO: Implement actual blockchain transaction execution
             // using this.blockchainContext.getDeployDispatcher()
         } catch (Exception e) {
             LOGGER.error(
-                "Failed to execute blockchain transaction for wallet {}: {}",
-                getRevAddress(),
-                transactionData,
-                e
-            );
+                    "Failed to execute blockchain transaction for wallet {}: {}",
+                    getRevAddress(),
+                    transactionData,
+                    e);
             throw new RuntimeException(
-                "Blockchain transaction failed: " + e.getMessage(),
-                e
-            );
+                    "Blockchain transaction failed: " + e.getMessage(),
+                    e);
         }
     }
 
@@ -697,19 +669,17 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
                 java.util.Arrays.fill(privateKey, (byte) 0);
                 // Log that cleanup occurred
                 LOGGER.debug(
-                    "Cleared private key from memory for wallet: {}",
-                    getRevAddress()
-                );
+                        "Cleared private key from memory for wallet: {}",
+                        getRevAddress());
             }
 
             // Remove sensitive temporary files if any exist
             cleanupTemporaryFiles();
         } catch (Exception e) {
             LOGGER.warn(
-                "Error during cleanup for unlocked wallet: {}",
-                getRevAddress(),
-                e
-            );
+                    "Error during cleanup for unlocked wallet: {}",
+                    getRevAddress(),
+                    e);
         }
     }
 
@@ -722,25 +692,23 @@ public class UnlockedPhysicalWallet extends PhysicalWallet {
             Path tempDir = walletPath.resolve("temp");
             if (Files.exists(tempDir)) {
                 Files.walk(tempDir)
-                    .sorted(java.util.Comparator.reverseOrder())
-                    .forEach(path -> {
-                        try {
-                            Files.deleteIfExists(path);
-                        } catch (IOException e) {
-                            LOGGER.debug(
-                                "Could not delete temp file: {}",
-                                path,
-                                e
-                            );
-                        }
-                    });
+                        .sorted(java.util.Comparator.reverseOrder())
+                        .forEach(path -> {
+                            try {
+                                Files.deleteIfExists(path);
+                            } catch (IOException e) {
+                                LOGGER.debug(
+                                        "Could not delete temp file: {}",
+                                        path,
+                                        e);
+                            }
+                        });
             }
         } catch (Exception e) {
             LOGGER.debug(
-                "Error cleaning up temporary files for wallet: {}",
-                getRevAddress(),
-                e
-            );
+                    "Error cleaning up temporary files for wallet: {}",
+                    getRevAddress(),
+                    e);
         }
     }
 }
