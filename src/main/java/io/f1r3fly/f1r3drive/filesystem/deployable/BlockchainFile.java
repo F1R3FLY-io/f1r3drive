@@ -31,26 +31,35 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
     protected long size = -1;
 
     // Illegal Filename Characters.
-    // In theory, it can't be used in filename, so it's safe to use it as a delimiter
+    // In theory, it can't be used in filename, so it's safe to use it as a
+    // delimiter
     private static String delimiter = "/";
 
     protected boolean isOtherChunksDeployed = false;
     protected Map<Integer, String> otherChunks = new ConcurrentHashMap<>();
 
-    public BlockchainFile(@NotNull BlockchainContext blockchainContext, @NotNull String name, @NotNull Directory parent) {
+    public BlockchainFile(@NotNull BlockchainContext blockchainContext, @NotNull String name,
+            @NotNull Directory parent) {
         this(blockchainContext, name, parent, true);
     }
 
-    protected BlockchainFile(@NotNull BlockchainContext blockchainContext, @NotNull String name, @NotNull Directory parent, boolean sendToShard) {
+    protected BlockchainFile(@NotNull BlockchainContext blockchainContext, @NotNull String name,
+            @NotNull Directory parent, boolean sendToShard) {
         super(blockchainContext, name, parent);
         if (sendToShard) {
             enqueueCreatingFile();
         }
         try {
-            cachedFile = java.io.File.createTempFile(name, null);
+            String prefix = name.length() < 3 ? name + "___" : name;
+            cachedFile = java.io.File.createTempFile(prefix, null);
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    // New constructor log
+    {
+        log.debug("BlockchainFile instance created: " + this);
     }
 
     private void enqueueCreatingFile() {
@@ -59,6 +68,14 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
         enqueueMutation(rholang);
     }
 
+    private void markDirty(String reason) {
+        if (!this.isDirty) {
+            this.isDirty = true;
+            log.debug("Marking file dirty: {} (Reason: {})", getAbsolutePath(), reason, new Exception("Stack Trace"));
+        } else {
+            log.trace("File already dirty: {} (Reason: {})", getAbsolutePath(), reason);
+        }
+    }
 
     public int read(FSPointer buffer, long size, long offset) throws IOException {
         open(); // make sure file is open
@@ -86,7 +103,7 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
 
         close();
 
-        isDirty = true;
+        markDirty("truncate");
 
         lastDeploymentOffset = 0;
 
@@ -112,16 +129,40 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
 
         open(); // make sure file is open
 
-        if (size >= 0) {
-            size = -1; // size changed, reset it
-        }
-
-        isDirty = true;
-        refreshLastUpdated();
-
         byte[] bytesToWrite = new byte[(int) bufSize];
         buffer.get(0, bytesToWrite, 0, (int) bufSize);
+
         synchronized (this) {
+            // Check for idempotency: if content is identical, skip write and deployment
+            // This prevents creating infinite loops if the system syncs the same content
+            // back
+            try {
+                if (rif.length() >= writeOffset + bufSize) {
+                    rif.seek(writeOffset);
+                    byte[] existing = new byte[(int) bufSize];
+                    int read = rif.read(existing);
+                    if (read == bufSize && java.util.Arrays.equals(existing, bytesToWrite)) {
+                        log.debug("Content identical at offset {}, skipping write/deploy to prevent loop", writeOffset);
+                        // Ensure isDirty is false since content matches
+                        if (isDirty) {
+                            log.debug("Clearing stale isDirty flag on identical write");
+                            isDirty = false;
+                        }
+                        return (int) bufSize;
+                    }
+                }
+            } catch (IOException e) {
+                // Ignore read errors during check, proceed to write
+                log.warn("Failed to check for idempotency", e);
+            }
+
+            if (size >= 0) {
+                size = -1; // size changed, reset it
+            }
+
+            markDirty("write");
+            refreshLastUpdated();
+
             rif.seek(writeOffset);
             rif.write(bytesToWrite, 0, (int) bufSize);
         }
@@ -240,7 +281,7 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
         this.isOtherChunksDeployed = true;
     }
 
-    public void onChange() {
+    public boolean onChange() {
         if (isDirty) {
             if (isDeployable()) {
                 try {
@@ -252,13 +293,15 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
                 }
             }
             isDirty = false;
+            return true;
         }
+        return false;
     }
 
     @Override
     public void rename(String newName, Directory newParent) throws OperationNotPermitted {
 
-        isDirty = true;
+        markDirty("rename");
         refreshLastUpdated();
 
         boolean wasEncrypted = PathUtils.isEncryptedExtension(name);
@@ -305,7 +348,6 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
     private boolean isDeployable() {
         return PathUtils.isDeployableFile(name);
     }
-
 
     @Override
     public void cleanLocalCache() {

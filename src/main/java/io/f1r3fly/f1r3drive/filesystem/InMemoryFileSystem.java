@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jetbrains.annotations.NotNull;
@@ -78,6 +79,26 @@ public class InMemoryFileSystem implements FileSystem {
 
     @NotNull
     private final CacheStrategy cacheStrategy;
+
+    private final Set<String> pendingDeletions = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Checks if a path or any of its parents are pending deletion.
+     */
+    private boolean isPendingDeletion(String path) {
+        String current = path;
+        while (current != null && !current.isEmpty() && !current.equals("/")) {
+            if (pendingDeletions.contains(current)) {
+                return true;
+            }
+            // Get parent path manually to avoid object overhead during frequent checks
+            int lastSep = current.lastIndexOf('/');
+            if (lastSep <= 0)
+                break; // Root or no parent
+            current = current.substring(0, lastSep);
+        }
+        return false;
+    }
 
     /**
      * Optional macOS FileProvider integration for native Finder support.
@@ -531,9 +552,28 @@ public class InMemoryFileSystem implements FileSystem {
      */
     public void createFile(String path, long mode)
             throws OperationNotPermitted {
+        if (isPendingDeletion(path)) {
+            logger.warn("Blocking recreation of pending-deletion file (or child of deleted dir): {}", path);
+            if (fileProviderIntegration != null && fileProviderIntegration.isInitialized()) {
+                fileProviderIntegration.removePlaceholder(path);
+            }
+            throw OperationNotPermitted.instance;
+        }
+
         try {
             Directory parent = getParentDirectoryInternal(path);
             String fileName = getLastComponent(path);
+
+            Path existing = parent.findDirectChild(fileName);
+            if (existing != null) {
+                if (existing instanceof File) {
+                    logger.debug("File {} already exists, skipping creation/deployment to prevent loop", path);
+                    return;
+                } else {
+                    // It exists but it's a directory? Throw error normally
+                    throw OperationNotPermitted.instance;
+                }
+            }
 
             // Record operation cost
             if (parent instanceof BlockchainDirectory) {
@@ -583,9 +623,27 @@ public class InMemoryFileSystem implements FileSystem {
      */
     public void makeDirectory(String path, long mode)
             throws OperationNotPermitted {
+        if (isPendingDeletion(path)) {
+            logger.warn("Blocking recreation of pending-deletion directory (or child): {}", path);
+            if (fileProviderIntegration != null && fileProviderIntegration.isInitialized()) {
+                fileProviderIntegration.removePlaceholder(path);
+            }
+            throw OperationNotPermitted.instance;
+        }
+
         try {
             Directory parent = getParentDirectoryInternal(path);
             String dirName = getLastComponent(path);
+
+            Path existing = parent.findDirectChild(dirName);
+            if (existing != null) {
+                if (existing instanceof Directory) {
+                    logger.debug("Directory {} already exists, skipping creation/deployment to prevent loop", path);
+                    return;
+                } else {
+                    throw OperationNotPermitted.instance;
+                }
+            }
 
             // Record operation cost
             if (parent instanceof BlockchainDirectory) {
@@ -820,6 +878,12 @@ public class InMemoryFileSystem implements FileSystem {
 
     public void removeDirectory(String path)
             throws PathNotFound, PathIsNotADirectory, DirectoryNotEmpty, OperationNotPermitted {
+        if (pendingDeletions.contains(path)) {
+            logger.debug("Skipping duplicate removeDirectory for pending deletion: {}", path);
+            return;
+        }
+        pendingDeletions.add(path);
+
         Directory directory = getDirectoryByPath(path);
         if (!directory.isEmpty()) {
             throw new DirectoryNotEmpty(path);
@@ -868,25 +932,32 @@ public class InMemoryFileSystem implements FileSystem {
 
         // Trigger blockchain update for truncated blockchain files
         if (file instanceof BlockchainFile) {
-            ((BlockchainFile) file).onChange();
-            logger.debug("Blockchain file truncated: {}", path);
-        }
+            boolean changed = ((BlockchainFile) file).onChange();
+            if (changed) {
+                logger.debug("Blockchain file truncated: {}", path);
 
-        // Sync with FileProvider if available
-        if (fileProviderIntegration != null &&
-                fileProviderIntegration.isInitialized() &&
-                file instanceof BlockchainFile) {
-            BlockchainFile blockchainFile = (BlockchainFile) file;
-            fileProviderIntegration.updatePlaceholder(
-                    path,
-                    blockchainFile.getSize(),
-                    blockchainFile.getLastUpdated());
-            logger.debug("Updated FileProvider placeholder after truncate: {}", path);
+                // Sync with FileProvider if available
+                if (fileProviderIntegration != null &&
+                        fileProviderIntegration.isInitialized()) {
+                    BlockchainFile blockchainFile = (BlockchainFile) file;
+                    fileProviderIntegration.updatePlaceholder(
+                            path,
+                            blockchainFile.getSize(),
+                            blockchainFile.getLastUpdated());
+                    logger.debug("Updated FileProvider placeholder after truncate: {}", path);
+                }
+            }
         }
     }
 
     public void unlinkFile(String path)
             throws PathNotFound, OperationNotPermitted {
+        if (pendingDeletions.contains(path)) {
+            logger.debug("Skipping duplicate unlinkFile for pending deletion: {}", path);
+            return;
+        }
+        pendingDeletions.add(path);
+
         Path p = getPath(path);
 
         // Remove from blockchain if it's a blockchain file
@@ -966,7 +1037,7 @@ public class InMemoryFileSystem implements FileSystem {
         // Trigger blockchain deployment for blockchain files
         if (file instanceof BlockchainFile) {
             BlockchainFile blockchainFile = (BlockchainFile) file;
-            blockchainFile.onChange();
+            boolean changed = blockchainFile.onChange();
 
             // Auto-deploy .rho and .metta files
             String fileName = file.getName().toLowerCase();
@@ -974,23 +1045,27 @@ public class InMemoryFileSystem implements FileSystem {
                 triggerAutomaticDeployment(blockchainFile);
             }
 
-            // Invalidate cache since file content changed
-            cacheStrategy.invalidate(path);
+            if (changed) {
+                // Invalidate cache since file content changed
+                cacheStrategy.invalidate(path);
 
-            // Sync with FileProvider if available
-            if (fileProviderIntegration != null &&
-                    fileProviderIntegration.isInitialized()) {
-                fileProviderIntegration.updatePlaceholder(
+                // Sync with FileProvider if available
+                if (fileProviderIntegration != null &&
+                        fileProviderIntegration.isInitialized()) {
+                    fileProviderIntegration.updatePlaceholder(
+                            path,
+                            blockchainFile.getSize(),
+                            blockchainFile.getLastUpdated());
+                    logger.debug("Updated FileProvider placeholder for: {}", path);
+                }
+
+                logger.debug(
+                        "Blockchain file modified: {} ({} bytes written)",
                         path,
-                        blockchainFile.getSize(),
-                        blockchainFile.getLastUpdated());
-                logger.debug("Updated FileProvider placeholder for: {}", path);
+                        bytesWritten);
+            } else {
+                logger.debug("Skipping placeholder update for unchanged file: {}", path);
             }
-
-            logger.debug(
-                    "Blockchain file modified: {} ({} bytes written)",
-                    path,
-                    bytesWritten);
         }
 
         return bytesWritten;
