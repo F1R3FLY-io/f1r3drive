@@ -1,559 +1,279 @@
 # F1r3Drive Architecture
 
+This document describes the high-level architecture of the F1r3Drive application, focusing on the relationships between classes and their responsibilities.
+
 ## Overview
 
-F1r3Drive is a FUSE-based filesystem implementation in Java that integrates with the F1r3fly blockchain network. It provides a virtual filesystem interface where users can interact with blockchain data as if it were regular files and directories.
-
-## Architecture Diagram
-
-```plantuml
-@startuml F1r3Drive_Architecture
-
-!define ABSTRACT abstract
-!define INTERFACE interface
-
-package "Application Layer" {
-    class F1r3DriveCli {
-        -validatorHost: String
-        -validatorPort: int
-        -observerHost: String
-        -observerPort: int
-        -cipherKeyPath: String
-        -mountPoint: Path
-        -revAddress: String
-        -privateKey: String
-        -manualPropose: boolean
-        -f1r3DriveFuse: F1r3DriveFuse
-        +call(): Integer
-        +main(args: String[]): void
-    }
-
-    class F1r3DriveFuse {
-        -blockchainClient: F1r3flyBlockchainClient
-        -fileSystem: FileSystem
-        +mount(mountPoint: Path, foreground: boolean): void
-        +umount(): void
-        +mountAndUnlockRootDirectory(mountPoint: Path, foreground: boolean, revAddress: String, privateKey: String): void
-    }
-}
-
-package "FUSE Layer" {
-    INTERFACE FuseFS {
-        +getattr(path: String, stat: FileStat): int
-        +mkdir(path: String, mode: long): int
-        +mknod(path: String, mode: long, dev: long): int
-        +unlink(path: String): int
-        +rmdir(path: String): int
-        +rename(path: String, newPath: String): int
-        +chmod(path: String, mode: long): int
-        +chown(path: String, uid: long, gid: long): int
-        +truncate(path: String, size: long): int
-        +open(path: String, fi: FuseFileInfo): int
-        +read(path: String, buf: Pointer, size: long, offset: long): int
-        +write(path: String, buf: Pointer, size: long, offset: long): int
-        +flush(path: String, fi: FuseFileInfo): int
-        +release(path: String, fi: FuseFileInfo): int
-        +opendir(path: String, fi: FuseFileInfo): int
-        +readdir(path: String, buf: Pointer, filler: FuseFillDir): int
-        +releasedir(path: String, fi: FuseFileInfo): int
-        +statfs(path: String, stbuf: Statvfs): int
-    }
-
-    class AbstractFuseFS {
-        #fileSystem: FileSystem
-        +getattr(path: String, stat: FileStat, fuseContext: FuseContext): int
-        +mkdir(path: String, mode: long): int
-        +mknod(path: String, mode: long, dev: long): int
-        +unlink(path: String): int
-        +rmdir(path: String): int
-        +rename(path: String, newPath: String): int
-        +truncate(path: String, size: long): int
-        +open(path: String): int
-        +read(path: String, buf: Pointer, size: long, offset: long): int
-        +write(path: String, buf: Pointer, size: long, offset: long): int
-        +flush(path: String): int
-        +opendir(path: String): int
-        +readdir(path: String, buf: Pointer, filler: FuseFillDir): int
-        +statfs(path: String, stbuf: Statvfs): int
-    }
-
-    class FuseStubFS {
-        +mount(mountPoint: Path, foreground: boolean): void
-        +umount(): void
-    }
-
-    class FuseCallbacks {
-        +registerCallback(operation: String, callback: Callback): void
-        +triggerCallback(operation: String, args: Object[]): Object
-    }
-
-    AbstractFuseFS ..|> FuseFS
-    FuseStubFS --> AbstractFuseFS
-}
-
-package "Filesystem Layer" {
-    INTERFACE FileSystem {
-        +getFile(path: String): File
-        +getDirectory(path: String): Directory
-        +isRootPath(path: String): boolean
-        +getParentPath(path: String): String
-        +createFile(path: String, mode: long): void
-        +getAttributes(path: String, stat: FileStat, fuseContext: FuseContext): void
-        +makeDirectory(path: String, mode: long): void
-        +readFile(path: String, buf: Pointer, size: long, offset: long): int
-        +readDirectory(path: String, buf: Pointer, filter: FuseFillDir): void
-        +getFileSystemStats(path: String, stbuf: Statvfs): void
-        +renameFile(path: String, newName: String): void
-        +removeDirectory(path: String): void
-        +truncateFile(path: String, offset: long): void
-        +unlinkFile(path: String): void
-        +openFile(path: String): void
-        +writeFile(path: String, buf: Pointer, size: long, offset: long): int
-        +flushFile(path: String): void
-        +unlockRootDirectory(revAddress: String, privateKey: String): void
-        +changeTokenFile(tokenFilePath: String): void
-        +terminate(): void
-        +waitOnBackgroundDeploy(): void
-    }
-
-    class InMemoryFileSystem {
-        -root: RootDirectory
-        -blockchainContext: BlockchainContext
-        -stateManager: StateChangeEventsManager
-        +getFile(path: String): File
-        +getDirectory(path: String): Directory
-        +isRootPath(path: String): boolean
-        +getParentPath(path: String): String
-        +createFile(path: String, mode: long): void
-        +makeDirectory(path: String, mode: long): void
-        +readFile(path: String, buf: Pointer, size: long, offset: long): int
-        +readDirectory(path: String, buf: Pointer, filter: FuseFillDir): void
-        +renameFile(path: String, newName: String): void
-        +removeDirectory(path: String): void
-        +truncateFile(path: String, offset: long): void
-        +unlinkFile(path: String): void
-        +openFile(path: String): void
-        +writeFile(path: String, buf: Pointer, size: long, offset: long): int
-        +flushFile(path: String): void
-        +unlockRootDirectory(revAddress: String, privateKey: String): void
-        +changeTokenFile(tokenFilePath: String): void
-        +terminate(): void
-        +waitOnBackgroundDeploy(): void
-    }
-
-    InMemoryFileSystem ..|> FileSystem
-}
-
-package "Filesystem Nodes" {
-    INTERFACE Path {
-        +getAttr(stat: FileStat, fuseContext: FuseContext): void
-        +getName(): String
-        +getAbsolutePath(): String
-        +getLastUpdated(): Long
-        +getParent(): Directory
-        +delete(): void
-        +rename(newName: String, newParent: Directory): void
-        +cleanLocalCache(): void
-        +getBlockchainContext(): BlockchainContext
-    }
-
-    INTERFACE Directory {
-        +listChildren(): Map<String, Path>
-        +getChild(name: String): Path
-        +addChild(name: String, child: Path): void
-        +removeChild(name: String): void
-        +isReadOnly(): boolean
-    }
-
-    INTERFACE File {
-        +getSize(): long
-        +getContent(): byte[]
-        +write(data: byte[]): void
-        +read(offset: long, size: int): byte[]
-    }
-
-    class AbstractPath {
-        #name: String
-        #absolutePath: String
-        #lastUpdated: Long
-        #parent: Directory
-        #blockchainContext: BlockchainContext
-        +getAttr(stat: FileStat, fuseContext: FuseContext): void
-        +getName(): String
-        +getAbsolutePath(): String
-        +getLastUpdated(): Long
-        +getParent(): Directory
-        +getBlockchainContext(): BlockchainContext
-    }
-
-    class RootDirectory {
-        -children: Map<String, Path>
-        -walletDirectories: Map<String, UnlockedWalletDirectory>
-        +listChildren(): Map<String, Path>
-        +getChild(name: String): Path
-        +addChild(name: String, child: Path): void
-        +removeChild(name: String): void
-        +isReadOnly(): boolean
-    }
-
-    class LockedWalletDirectory {
-        -revAddress: String
-        +isReadOnly(): boolean
-        +unlock(privateKey: String): UnlockedWalletDirectory
-    }
-
-    class UnlockedWalletDirectory {
-        -blockchainContext: BlockchainContext
-        -children: Map<String, Path>
-        +listChildren(): Map<String, Path>
-        +getChild(name: String): Path
-        +addChild(name: String, child: Path): void
-        +removeChild(name: String): void
-        +isReadOnly(): boolean
-    }
-
-    class TokenDirectory {
-        -tokenValue: String
-        -children: Map<String, Path>
-        +listChildren(): Map<String, Path>
-        +getChild(name: String): Path
-        +addChild(name: String, child: Path): void
-        +removeChild(name: String): void
-        +isReadOnly(): boolean
-    }
-
-    class TokenFile {
-        -tokenValue: String
-        +getSize(): long
-        +getContent(): byte[]
-        +read(offset: long, size: int): byte[]
-    }
-
-    class BlockchainDirectory {
-        -blockchainContext: BlockchainContext
-        -children: Map<String, Path>
-        +listChildren(): Map<String, Path>
-        +getChild(name: String): Path
-        +addChild(name: String, child: Path): void
-        +removeChild(name: String): void
-        +isReadOnly(): boolean
-    }
-
-    class BlockchainFile {
-        -blockchainContext: BlockchainContext
-        -content: byte[]
-        +getSize(): long
-        +getContent(): byte[]
-        +write(data: byte[]): void
-        +read(offset: long, size: int): byte[]
-    }
-
-    class FetchedDirectory {
-        -fetchedData: Map<String, byte[]>
-        -children: Map<String, Path>
-        +listChildren(): Map<String, Path>
-        +getChild(name: String): Path
-        +addChild(name: String, child: Path): void
-        +removeChild(name: String): void
-        +isReadOnly(): boolean
-    }
-
-    class FetchedFile {
-        -content: byte[]
-        +getSize(): long
-        +getContent(): byte[]
-        +read(offset: long, size: int): byte[]
-    }
-
-    AbstractPath ..|> Path
-    RootDirectory --> Directory
-    LockedWalletDirectory --> AbstractPath
-    UnlockedWalletDirectory --> AbstractPath
-    UnlockedWalletDirectory --> Directory
-    TokenDirectory --> AbstractPath
-    TokenDirectory --> Directory
-    TokenFile --> AbstractPath
-    TokenFile --> File
-    BlockchainDirectory --> AbstractPath
-    BlockchainDirectory --> Directory
-    BlockchainFile --> AbstractPath
-    BlockchainFile --> File
-    FetchedDirectory --> AbstractPath
-    FetchedDirectory --> Directory
-    FetchedFile --> AbstractPath
-    FetchedFile --> File
-}
-
-package "Blockchain Layer" {
-    class BlockchainContext {
-        -walletInfo: RevWalletInfo
-        -deployDispatcher: DeployDispatcher
-        +getWalletInfo(): RevWalletInfo
-        +getDeployDispatcher(): DeployDispatcher
-        +getBlockchainClient(): F1r3flyBlockchainClient
-    }
-
-    class F1r3flyBlockchainClient {
-        -validatorHost: String
-        -validatorPort: int
-        -observerHost: String
-        -observerPort: int
-        -manualPropose: boolean
-        -validatorChannel: Channel
-        -observerChannel: Channel
-        +deploy(rholangExpression: String): DeployResponse
-        +read(rholangExpression: String): ReadResponse
-        +getBalance(revAddress: String): long
-        +proposeBlock(): void
-        +finalizeBlock(): void
-    }
-
-    class DeployDispatcher {
-        -blockchainClient: F1r3flyBlockchainClient
-        -queue: Queue<Deploy>
-        +dispatch(deploy: Deploy): void
-        +getDeployResult(deployId: String): DeployResult
-        +getBlockchainClient(): F1r3flyBlockchainClient
-    }
-
-    class RevWalletInfo {
-        -revAddress: String
-        -publicKey: String
-        -privateKey: String
-        +getRevAddress(): String
-        +getPublicKey(): String
-        +getPrivateKey(): String
-    }
-
-    class RholangExpressionConstructor {
-        +buildWriteExpression(path: String, data: byte[]): String
-        +buildReadExpression(path: String): String
-        +buildListExpression(path: String): String
-        +buildDeleteExpression(path: String): String
-    }
-
-    class PrivateKeyValidator {
-        +validate(privateKey: String): boolean
-        +validateFormat(privateKey: String): boolean
-        +validateChecksum(privateKey: String): boolean
-    }
-
-    BlockchainContext --> RevWalletInfo
-    BlockchainContext --> DeployDispatcher
-    DeployDispatcher --> F1r3flyBlockchainClient
-    F1r3flyBlockchainClient --> RholangExpressionConstructor
-    RevWalletInfo --> PrivateKeyValidator
-}
-
-package "State Management Layer" {
-    INTERFACE EventQueue {
-        +offer(event: StateChangeEvent): boolean
-        +poll(timeout: long, unit: TimeUnit): StateChangeEvent
-        +size(): int
-        +clear(): void
-    }
-
-    INTERFACE EventProcessorRegistry {
-        +register(eventType: String, processor: EventProcessor): void
-        +unregister(eventType: String): void
-        +getProcessor(eventType: String): EventProcessor
-        +getAllProcessors(): Collection<EventProcessor>
-    }
-
-    INTERFACE EventProcessor {
-        +process(event: StateChangeEvent): void
-    }
-
-    class BlockingEventQueue {
-        -queue: BlockingQueue<StateChangeEvent>
-        -capacity: int
-        +offer(event: StateChangeEvent): boolean
-        +poll(timeout: long, unit: TimeUnit): StateChangeEvent
-        +size(): int
-        +clear(): void
-    }
-
-    class DefaultEventProcessorRegistry {
-        -processors: Map<String, EventProcessor>
-        +register(eventType: String, processor: EventProcessor): void
-        +unregister(eventType: String): void
-        +getProcessor(eventType: String): EventProcessor
-        +getAllProcessors(): Collection<EventProcessor>
-    }
-
-    class DefaultEventProcessor {
-        +process(event: StateChangeEvent): void
-        -handleEvent(event: StateChangeEvent): void
-    }
-
-    class StateChangeEventsManager {
-        -eventQueue: EventQueue
-        -processorRegistry: EventProcessorRegistry
-        -eventProcessor: EventProcessor
-        -eventProcessingThreadPool: ExecutorService
-        -eventDispatcherThread: Thread
-        -config: StateChangeEventsManagerConfig
-        -shutdown: volatile boolean
-        +publishEvent(event: StateChangeEvent): void
-        +onStateChange(event: StateChangeEvent): void
-        +shutdown(): void
-        +waitForCompletion(): void
-    }
-
-    class StateChangeEventsManagerConfig {
-        -queueCapacity: int
-        -threadPoolSize: int
-        -threadNamePrefix: String
-        +getQueueCapacity(): int
-        +getThreadPoolSize(): int
-        +getThreadNamePrefix(): String
-        +defaultConfig(): StateChangeEventsManagerConfig
-    }
-
-    class StateChangeEventProcessor {
-        +process(event: StateChangeEvent): void
-    }
-
-    class StateChangeEvents {
-        +FileCreated(path: String, timestamp: long): Event
-        +FileDeleted(path: String, timestamp: long): Event
-        +FileModified(path: String, timestamp: long): Event
-        +DirectoryCreated(path: String, timestamp: long): Event
-        +DirectoryDeleted(path: String, timestamp: long): Event
-    }
-
-    BlockingEventQueue ..|> EventQueue
-    DefaultEventProcessorRegistry ..|> EventProcessorRegistry
-    DefaultEventProcessor ..|> EventProcessor
-    StateChangeEventProcessor ..|> EventProcessor
-    StateChangeEventsManager --> EventQueue
-    StateChangeEventsManager --> EventProcessorRegistry
-    StateChangeEventsManager --> StateChangeEventsManagerConfig
-    StateChangeEventsManager --> EventProcessor
-}
-
-package "Security & Encryption" {
-    class AESCipher {
-        -{static} instance: AESCipher
-        -cipher: Cipher
-        -key: SecretKey
-        -{static} init(keyPath: String): void
-        +encrypt(plaintext: String): String
-        +decrypt(ciphertext: String): String
-        +{static} getInstance(): AESCipher
-    }
-
-    class SecurityUtils {
-        +{static} validatePermissions(path: String, requiredPermission: int): boolean
-        +{static} getCurrentUser(): String
-        +{static} getFileOwner(path: String): String
-    }
-}
-
-package "Error Handling" {
-    class F1r3DriveError {
-        -errorCode: int
-        -errorMessage: String
-        +getErrorCode(): int
-        +getErrorMessage(): String
-    }
-
-    class PathNotFound extends F1r3DriveError
-    class FileAlreadyExists extends F1r3DriveError
-    class DirectoryNotEmpty extends F1r3DriveError
-    class OperationNotPermitted extends F1r3DriveError
-    class PathIsNotAFile extends F1r3DriveError
-    class PathIsNotADirectory extends F1r3DriveError
-    class NoDataByPath extends F1r3DriveError
-    class InvalidSigningKeyException extends F1r3DriveError
-    class F1r3flyDeployError extends F1r3DriveError
-}
-
-' Relationships
-F1r3DriveCli --> F1r3DriveFuse
-F1r3DriveFuse --> FuseStubFS
-F1r3DriveFuse --> InMemoryFileSystem
-AbstractFuseFS --> FileSystem
-FuseStubFS --> FuseCallbacks
-InMemoryFileSystem --> RootDirectory
-InMemoryFileSystem --> BlockchainContext
-InMemoryFileSystem --> StateChangeEventsManager
-RootDirectory --> Path
-UnlockedWalletDirectory --> BlockchainContext
-BlockchainDirectory --> BlockchainContext
-StateChangeEventsManager --> StateChangeEvents
-F1r3DriveCli --> AESCipher
-F1r3flyBlockchainClient --> SecurityUtils
-
-@enduml
-```
+F1r3Drive is a blockchain-integrated file system that acts as a bridge between a local macOS environment (via FileProvider) and the F1r3fly blockchain. It maintains an in-memory representation of the file system which is synchronized with the blockchain state.
 
 ## Core Components
 
-### 1. Application Layer
-- **F1r3DriveCli**: Command-line interface entry point that parses arguments and initializes the application
-- **F1r3DriveFuse**: Initializes and manages the FUSE filesystem lifecycle
+### 1. File System Core (`io.f1r3fly.f1r3drive.filesystem`)
 
-### 2. FUSE Layer
-- **FuseFS**: Interface defining all FUSE operations
-- **AbstractFuseFS**: Base implementation handling common FUSE operation logic
-- **FuseStubFS**: Bridge between FUSE library and the filesystem layer
-- **FuseCallbacks**: Registers and triggers FUSE operation callbacks
+The core logic handles file operations, structural hierarchy, and state management.
 
-### 3. Filesystem Layer
-- **FileSystem**: Interface defining all filesystem operations
-- **InMemoryFileSystem**: In-memory implementation managing the virtual filesystem
+*   **`FileSystem` (Interface)**: Defines standard file system operations (create, read, write, delete, etc.).
+*   **`InMemoryFileSystem`**: The primary implementation of `FileSystem`. It holds the root of the file tree and manages the lifecycle of files and directories. It is responsible for:
+    *   Routing operations to specific nodes.
+    *   Managing cache invalidation (`CacheStrategy`).
+    *   Coordinating between local changes and blockchain updates.
+    *   Handling "Placeholders" for the macOS FileProvider.
 
-### 4. Filesystem Nodes
-- **Path**: Base interface for all filesystem entities
-- **AbstractPath**: Common implementation for all path types
-- **Directory**: Interface for directory operations
-- **File**: Interface for file operations
-- **RootDirectory**: Filesystem root containing wallet directories
-- **LockedWalletDirectory**: Wallet directory requiring authentication
-- **UnlockedWalletDirectory**: Authenticated wallet directory with blockchain access
-- **TokenDirectory/TokenFile**: Stores authentication tokens
-- **BlockchainDirectory/BlockchainFile**: Direct blockchain data access
-- **FetchedDirectory/FetchedFile**: Cached blockchain data
+### 2. File System Nodes (`io.f1r3fly.f1r3drive.filesystem.common` & `.deployable` & `.local`)
 
-### 5. Blockchain Layer
-- **BlockchainContext**: Holds wallet info and deploy dispatcher
-- **F1r3flyBlockchainClient**: Communication with F1r3fly shard via gRPC
-- **DeployDispatcher**: Manages blockchain transaction dispatching
-- **RevWalletInfo**: Wallet credentials and information
-- **RholangExpressionConstructor**: Builds Rholang expressions for blockchain operations
-- **PrivateKeyValidator**: Validates private key format and integrity
+The file tree is built from nodes implementing `Path`, `File`, or `Directory` interfaces.
 
-### 6. State Management Layer
-- **EventQueue**: Asynchronous event queueing interface
-- **EventProcessorRegistry**: Registry for event processors
-- **EventProcessor**: Interface for processing state change events
-- **StateChangeEventsManager**: Coordinates event processing
-- **StateChangeEventsManagerConfig**: Configuration for event manager
-- **StateChangeEvents**: Factory for creating state change events
+*   **`AbstractPath`**: Base class for all nodes, holding common metadata (name, parent, lastUpdated).
+*   **Deployable Nodes** (Blockchain-backed):
+    *   **`AbstractDeployablePath`**: Base class for nodes that sync with the blockchain. Handles Rholang deployment queuing.
+    *   **`BlockchainDirectory`**: Represents a folder on the blockchain. Manages children and syncs structure changes.
+    *   **`BlockchainFile`**: Represents a file on the blockchain. Manages content chunks, encryption, and local caching.
+*   **Local Nodes** (Local-only):
+    *   **`AbstractLocalPath`**: Base class for nodes that exist only locally or have special logic.
+    *   **`TokenDirectory`** (`.tokens`): A special directory that visualizes wallet balance as token files. It is read-only and regenerates its content based on blockchain balance.
+    *   **`TokenFile`**: Represents a specific amount of REV tokens.
 
-### 7. Security & Encryption
-- **AESCipher**: Singleton for encryption/decryption operations
-- **SecurityUtils**: Utility methods for permission validation and user management
+### 3. Blockchain Integration (`io.f1r3fly.f1r3drive.blockchain`)
 
-### 8. Error Handling
-- **F1r3DriveError**: Base exception class
-- **Specific Exceptions**: PathNotFound, FileAlreadyExists, DirectoryNotEmpty, OperationNotPermitted, PathIsNotAFile, PathIsNotADirectory, NoDataByPath, InvalidSigningKeyException, F1r3flyDeployError
+Handles communication with the F1r3fly blockchain node.
 
-## Data Flow
+*   **`BlockchainContext`**: Holds references to the client, wallet info, and dispatcher. Accessible to all file system nodes.
+*   **`F1r3flyBlockchainClient`**: Low-level client for gRPC/HTTP communication with the node.
+*   **`DeployDispatcher`**: Manages a queue of Rholang deployments to ensure sequential and reliable execution of blockchain transactions.
+*   **`RholangExpressionConstructor`**: Helper to generate Rholang code for file operations (create, write, delete, check balance).
 
-1. **User Operation** → F1r3DriveCli (CLI) → F1r3DriveFuse (initialization)
-2. **FUSE Call** → FuseStubFS → AbstractFuseFS → InMemoryFileSystem → Path nodes
-3. **Blockchain Operation** → BlockchainContext → F1r3flyBlockchainClient → F1r3fly network
-4. **State Change** → StateChangeEventsManager → EventProcessor → Filesystem update
-5. **Encryption** → AESCipher (singleton) → encrypt/decrypt operations
+### 4. Platform Integration (`io.f1r3fly.f1r3drive.platform` & `.placeholder`)
 
-## Key Design Patterns
+Bridges the Java application with the macOS operating system.
 
-- **Singleton**: AESCipher for global cipher instance
-- **Strategy**: EventProcessor implementations for different event types
-- **Decorator**: Path hierarchy with specialized implementations
-- **Facade**: InMemoryFileSystem abstracts complexity
-- **Command**: RholangExpressionConstructor builds blockchain commands
-- **Observer**: StateChangeEventsManager notifies processors of changes
-- **Registry**: EventProcessorRegistry manages available processors
+*   **`F1r3DriveChangeListener`**: Listens for file system events from the OS. It filters noise (like `.DS_Store`) and triggers syncing logic in `FileSystem` or `PlaceholderManager`.
+*   **`FileProviderIntegration`**: Manages the macOS FileProvider extension, creating "placeholder" files that look like real files but load content on demand.
+*   **`MacOSChangeWatcher`**: Main platform abstraction for macOS.
+*   **`FSEventsMonitor`**: Low-level monitoring of file system events via JNI.
+
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────┐
+│       macOS (Local System)          │
+│                                     │
+│  FSEvents         FileProvider      │
+│     │                  │            │
+└─────┼──────────────────┼────────────┘
+      │                  │
+      ▼                  ▼
+┌─────────────────────────────────────┐
+│   Platform Integration Layer        │
+│                                     │
+│  FSEventsMonitor   FileProviderInt. │
+│         │              │            │
+│         ▼              │            │
+│    MacOSChangeWatcher  │            │
+│         │              │            │
+│         ▼              ▼            │
+│     F1r3DriveChangeListener         │
+└────────────────┬────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────┐
+│   Core File System (InMemoryFS)     │
+│                                     │
+│        PlaceholderManager           │
+│                │                    │
+│    ┌───────────┴─────────────┐      │
+│    │  File System Tree       │      │
+│    │                         │      │
+│    │  [Root]                 │      │
+│    │     │                   │      │
+│    │  [Wallet]               │      │
+│    │     ├── .tokens         │      │
+│    │     └── [BlockchainDir] │      │
+│    │             │           │      │
+│    │         [BlockchainFile]│      │
+│    └─────────────────────────┘      │
+└────────────────┬────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────┐
+│   Blockchain Integration Layer      │
+│                                     │
+│         DeployDispatcher            │
+│                │                    │
+│     F1r3flyBlockchainClient         │
+└────────────────┬────────────────────┘
+                 │
+                 ▼
+           [ gRPC API ]
+                 │
+      ┌──────────▼──────────┐
+      │  F1r3fly Blockchain │
+      │      (Rholang)      │
+      └─────────────────────┘
+```
+
+## Data Flows
+
+### 1. File Creation / Write
+
+```
+User Action (Finder)
+      │
+      ▼
+MacOSChangeWatcher (FSEvents)
+      │
+      ▼
+F1r3DriveChangeListener.onFileModified()
+      │
+      ▼
+InMemoryFileSystem.writeFile()
+      │
+      ▼
+BlockchainFile.write()
+      │
+      ├── 1. Updates Local Cache (File)
+      │
+      └── 2. Queues Deployment (if changed)
+             │
+             ▼
+      DeployDispatcher.enqueueDeploy()
+             │
+             ▼
+      F1r3flyBlockchainClient.deploy()
+```
+
+### 2. Reading a File (Placeholder)
+
+```
+User Action (Open File)
+      │
+      ▼
+FileProviderIntegration.onMaterializationRequest()
+      │
+      ▼
+PlaceholderManager.loadContent()
+      │
+      ▼
+CacheStrategy.get() ──────────────────────────┐
+      │                                       │
+      ▼ [Miss]                                ▼ [Hit]
+FileChangeCallback.loadFileContent()     Return Cached Content
+      │                                       ▲
+      ▼                                       │
+F1r3flyBlockchainClient.exploratoryDeploy()   │
+      │                                       │
+      ▼                                       │
+CacheStrategy.put() ──────────────────────────┘
+      │
+      ▼
+Return Content to FileProvider
+```
+
+### 3. File Deletion
+
+```
+User Action (Move to Trash)
+      │
+      ▼
+MacOSChangeWatcher
+      │
+      ▼
+F1r3DriveChangeListener.onFileDeleted()
+      │
+      ▼
+InMemoryFileSystem.unlinkFile()
+      │
+      ├── 1. Add to pendingDeletions (Loop Prevention)
+      │
+      ├── 2. Remove FileProvider Placeholder
+      │
+      ├── 3. Remove Link from Parent Directory
+      │
+      └── 4. Queue Blockchain Deletion
+             │
+             ▼
+      RholangExpressionConstructor.forgetChanel()
+             │
+             ▼
+      DeployDispatcher.enqueueDeploy()
+```
+
+### 4. Directory Creation
+
+```
+User Action (New Folder)
+      │
+      ▼
+MacOSChangeWatcher
+      │
+      ▼
+F1r3DriveChangeListener.onFileCreated()
+      │
+      ▼
+InMemoryFileSystem.makeDirectory()
+      │
+      ├── 1. Check Existence (Idempotency)
+      │
+      ├── 2. Create In-Memory BlockchainDirectory
+      │
+      └── 3. Create FileProvider Placeholder
+             │
+             ▼
+      FileProviderIntegration.createPlaceholder()
+```
+
+### 5. File Rename / Move
+
+```
+User Action (Rename)
+      │
+      ▼
+MacOSChangeWatcher
+      │
+      ▼
+F1r3DriveChangeListener.onFileMoved()
+      │
+      ▼
+InMemoryFileSystem.renameFile()
+      │
+      ├── 1. Update In-Memory Path & Parent
+      │
+      ├── 2. BlockchainFile.onChange()
+      │
+      └── 3. Update FileProvider Placeholders
+             (Remove Old -> Create New)
+```
+
+
+
+## Key Interactions
+
+*   **Idempotency**: `BlockchainFile.write` checks if content has actually changed before queuing a transaction.
+*   **Loop Prevention**: `InMemoryFileSystem` uses the return value of `BlockchainFile.onChange()` to decide whether to notify `FileProvider`, breaking infinite sync loops.
+*   **State Preservation**: `BlockchainDirectory` reuses existing file objects to preserve their state (e.g., `isDirty` flags) during directory refresh.
+
+## Caching Strategy
+
+F1r3Drive employs a multi-tiered caching system to optimize performance and minimize blockchain reads.
+
+### 1. Tiered Cache (Managed by `CacheStrategy`)
+Used for storing file content retrieved from the blockchain to serve read requests quickly.
+
+*   **L1 Memory Cache**:
+    *   **Size**: 100 MB
+    *   **Implementation**: Caffeine (High-performance Java cache)
+    *   **Use Case**: Frequently accessed small files.
+*   **L2 Disk Cache**:
+    *   **Location**: `~/.f1r3drive/cache`
+    *   **Size**: 1 GB
+    *   **Expiration**: 30 minutes
+    *   **Use Case**: Larger files or persistence across restarts.
+
+### 2. Local Operational Cache (`BlockchainFile` Internal)
+Used for temporary storage during file operations (write/read/encryption).
+
+*   **Location**: System Temp Directory (`java.io.tmpdir`)
+*   **Format**: Unique temporary files (e.g., `myfile.txt___12345.tmp`)
+*   **Lifecycle**: Created on file access, deleted on file close or application exit.
+*   **Purpose**:
+    *   Buffer for `RandomAccessFile` operations.
+    *   Staging area for encryption/decryption before blockchain deployment.
