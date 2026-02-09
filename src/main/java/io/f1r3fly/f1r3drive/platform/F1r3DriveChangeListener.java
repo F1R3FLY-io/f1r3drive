@@ -135,14 +135,31 @@ public class F1r3DriveChangeListener implements ChangeListener {
                     // mode 0755
                     fileSystem.makeDirectory(relativePath, 0755L);
                 } else {
-                    // Create file in FileSystem (queues deployment)
-                    // mode 0644
-                    fileSystem.createFile(relativePath, 0644L);
-                    // Also write content if any
-                    if (Files.size(p) > 0) {
-                        byte[] content = Files.readAllBytes(p);
+                    // READ CONTENT FIRST to avoid reading the placeholder overwritten by createFile
+                    byte[] content = null;
+                    if (Files.exists(p) && Files.size(p) > 0) {
+                        content = Files.readAllBytes(p);
+                    }
+
+                    // Create file in FileSystem
+                    // If file exists and we have content, treat it as an import to avoid
+                    // overwriting with placeholder
+                    if (content != null && content.length > 0 &&
+                            fileSystem instanceof io.f1r3fly.f1r3drive.filesystem.InMemoryFileSystem) {
+                        ((io.f1r3fly.f1r3drive.filesystem.InMemoryFileSystem) fileSystem).importFile(
+                                relativePath,
+                                0644L,
+                                content.length);
+                    } else {
+                        // Otherwise normal creation
+                        fileSystem.createFile(relativePath, 0644L);
+                    }
+
+                    // Write the ORIGINAL content
+                    if (content != null && content.length > 0) {
                         io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer ptr = wrapBytes(content);
                         fileSystem.writeFile(relativePath, ptr, content.length, 0);
+                        fileSystem.flushFile(relativePath);
                     }
                 }
             }
@@ -181,6 +198,7 @@ public class F1r3DriveChangeListener implements ChangeListener {
                     byte[] content = Files.readAllBytes(p);
                     io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer ptr = wrapBytes(content);
                     fileSystem.writeFile(relativePath, ptr, content.length, 0);
+                    fileSystem.flushFile(relativePath);
                 }
             }
         } catch (Exception e) {

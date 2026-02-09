@@ -126,23 +126,58 @@ public class F1r3DriveFuse extends FuseStubFS {
             @Override
             public byte[] loadFileContent(String path) {
                 try {
-                    LOGGER.debug(
-                            "Loading file content from blockchain for: {}",
-                            path);
-                    // For now, return mock content - this needs to be implemented
-                    // based on the actual blockchain client API
-                    LOGGER.warn(
-                            "loadFileContent not yet implemented for path: {}",
-                            path);
-                    return ("Mock content for file: " + path).getBytes();
+                    LOGGER.debug("Loading file content from filesystem for: {}", path);
+
+                    // Use InMemoryFileSystem directly
+                    if (fileSystem instanceof InMemoryFileSystem) {
+                        InMemoryFileSystem imfs = (InMemoryFileSystem) fileSystem;
+
+                        // Ensure path starts with slash for internal FS lookup
+                        String lookupPath = path.startsWith("/") ? path : "/" + path;
+
+                        io.f1r3fly.f1r3drive.filesystem.common.File file = imfs.getFile(lookupPath);
+                        if (file != null) {
+                            long size = file.getSize();
+                            if (size <= 0) {
+                                return new byte[0];
+                            }
+
+                            byte[] data = new byte[(int) size];
+                            io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer ptr = new io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer() {
+                                @Override
+                                public void put(long offset, byte[] bytes, int start, int length) {
+                                    System.arraycopy(bytes, start, data, (int) offset, length);
+                                }
+
+                                @Override
+                                public void get(long offset, byte[] bytes, int start, int length) {
+                                    throw new UnsupportedOperationException("Read only pointer");
+                                }
+
+                                @Override
+                                public byte getByte(long offset) {
+                                    return 0;
+                                }
+
+                                @Override
+                                public void putByte(long offset, byte value) {
+                                    data[(int) offset] = value;
+                                }
+                            };
+
+                            // Use the readFile method which ensures content loading from blockchain
+                            int res = imfs.readFile(lookupPath, ptr, size, 0);
+                            if (res == 0) {
+                                return data;
+                            }
+                        }
+                    }
+
+                    LOGGER.warn("File not found or empty in FS: {}", path);
+                    return new byte[0];
                 } catch (Exception e) {
-                    LOGGER.error(
-                            "Failed to load file content for: {}",
-                            path,
-                            e);
-                    throw new RuntimeException(
-                            "Failed to load file content",
-                            e);
+                    LOGGER.error("Failed to load file content for: {}", path, e);
+                    throw new RuntimeException("Failed to load file content", e);
                 }
             }
 

@@ -334,6 +334,54 @@ public class FileProviderIntegration {
     }
 
     /**
+     * Registers an existing file as a materialized placeholder.
+     * This is used when a file is created locally (e.g. by the user) and we want to
+     * register it with the File Provider system without overwriting it with a stub.
+     *
+     * @param relativePath relative path within the domain
+     * @param size         file size in bytes
+     * @param lastModified last modification timestamp
+     * @param isDirectory  true if this is a directory
+     * @return true if registered successfully
+     */
+    public boolean registerMaterializedFile(
+            String relativePath,
+            long size,
+            long lastModified,
+            boolean isDirectory) {
+        lock.writeLock().lock();
+        try {
+            if (!isInitialized.get()) {
+                LOGGER.error("Cannot register materialized file: File Provider not initialized");
+                return false;
+            }
+
+            LOGGER.debug(
+                    "Registering materialized file: path={}, size={}, isDir={}",
+                    relativePath,
+                    size,
+                    isDirectory);
+
+            PlaceholderInfo info = new PlaceholderInfo(
+                    relativePath,
+                    size,
+                    lastModified,
+                    isDirectory,
+                    defaultMaterializationPolicy);
+            info.isMaterialized = true; // Mark as already materialized
+            placeholders.put(relativePath, info);
+
+            LOGGER.debug("Materialized file registered successfully: {}", relativePath);
+            return true;
+        } catch (Exception e) {
+            LOGGER.error("Error registering materialized file: {}", relativePath, e);
+            return false;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
      * Materializes a placeholder file by loading its content.
      *
      * @param relativePath relative path of the file to materialize

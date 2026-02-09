@@ -177,9 +177,12 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
     }
 
     private void deployChunk() throws IOException {
+        log.debug("deployChunk called for file: {} offset: {} size: {}", getAbsolutePath(), lastDeploymentOffset,
+                getSize());
         open(); // make sure file is open
 
         int size = (int) Math.min(getSize() - lastDeploymentOffset, MAX_FILE_CHUNK_SIZE);
+        log.debug("deployChunk calculated chunk size: {}", size);
 
         byte[] bytes = new byte[size];
         synchronized (this) {
@@ -228,10 +231,15 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
     }
 
     public void close() {
+        log.debug("close() called for file: {} lastDeploymentOffset: {} size: {}", getAbsolutePath(),
+                lastDeploymentOffset, getSize());
         try {
             // append a last part of the file if any
             if (lastDeploymentOffset < getSize()) {
+                log.debug("close() triggering deployChunk for remaining {} bytes", getSize() - lastDeploymentOffset);
                 deployChunk();
+            } else {
+                log.debug("close() skipping deployChunk, everything deployed");
             }
 
             if (!isOtherChunksDeployed) {

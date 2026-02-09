@@ -32,7 +32,11 @@ import io.f1r3fly.f1r3drive.platform.macos.FileProviderIntegration;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.Arrays;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
@@ -612,6 +616,57 @@ public class InMemoryFileSystem implements FileSystem {
         }
     }
 
+    /**
+     * Imports a file that already exists on disk into the virtual filesystem.
+     * Unlike createFile, this does NOT create a placeholder (which would overwrite
+     * the file).
+     * Instead, it registers the existing file as materialized.
+     */
+    public void importFile(String path, long mode, long size)
+            throws OperationNotPermitted {
+        if (isPendingDeletion(path)) {
+            logger.warn("Blocking re-import of pending-deletion file: {}", path);
+            throw OperationNotPermitted.instance;
+        }
+
+        try {
+            Directory parent = getParentDirectoryInternal(path);
+            String fileName = getLastComponent(path);
+
+            Path existing = parent.findDirectChild(fileName);
+            if (existing != null) {
+                // File already exists in VFS, no need to do anything
+                logger.debug("File {} already exists in VFS, skipping import", path);
+                return;
+            }
+
+            // Create new blockchain file object using the correct constructor from parent
+            // context
+            BlockchainFile newFile = new BlockchainFile(
+                    parent.getBlockchainContext(),
+                    fileName,
+                    parent);
+            parent.addChild(newFile);
+
+            // Register as materialized with FileProvider if available
+            if (fileProviderIntegration != null &&
+                    fileProviderIntegration.isInitialized()) {
+                fileProviderIntegration.registerMaterializedFile(
+                        path,
+                        size,
+                        System.currentTimeMillis(),
+                        false);
+                logger.debug("Registered imported file as materialized: {}", path);
+            }
+
+            logger.debug(
+                    "Imported blockchain file: {} (will be deployed)",
+                    path);
+        } catch (PathNotFound e) {
+            throw OperationNotPermitted.instance;
+        }
+    }
+
     public void getAttributes(String path, FSFileStat stbuf, FSContext context)
             throws PathNotFound {
         Path p = getPath(path);
@@ -771,25 +826,51 @@ public class InMemoryFileSystem implements FileSystem {
 
             RhoTypes.Expr result = future.get(30, TimeUnit.SECONDS);
 
-            if (result != null && result.hasGByteArray()) {
-                byte[] content = RholangExpressionConstructor.parseExploratoryDeployBytes(
-                        result);
-                if (content.length > 0) {
-                    // Cache content using Caffeine (simplified without metadata)
-                    cacheStrategy.put(
-                            file.getAbsolutePath(),
-                            content,
-                            null // No metadata for now
-                    );
+            if (result != null) {
+                // Parse the result as ChannelData (Map), not just bytes
+                RholangExpressionConstructor.ChannelData fileData = RholangExpressionConstructor
+                        .parseExploratoryDeployResult(result);
 
-                    // Write content to file
-                    file.open();
-                    FSPointer buffer = createFSPointer(content);
-                    file.write(buffer, content.length, 0);
+                if (fileData.isFile()) {
+                    long offset = 0;
+
+                    // Write first chunk
+                    if (fileData.firstChunk() != null) {
+                        offset += file.initFromBytes(fileData.firstChunk(), offset);
+                    }
+
+                    // Handle other chunks if present
+                    if (fileData.otherChunks() != null && !fileData.otherChunks().isEmpty()) {
+                        List<Integer> sortedChunks = fileData.otherChunks().keySet().stream()
+                                .sorted()
+                                .collect(Collectors.toList());
+
+                        for (Integer chunkNum : sortedChunks) {
+                            String subChannel = fileData.otherChunks().get(chunkNum);
+                            String subQuery = RholangExpressionConstructor.readFromChannel(subChannel);
+
+                            // Synchronous fetch for chunks to ensure order
+                            RhoTypes.Expr subResult = blockchainClient.exploratoryDeploy(subQuery);
+
+                            if (subResult != null && subResult.hasGByteArray()) {
+                                byte[] chunkData = RholangExpressionConstructor.parseExploratoryDeployBytes(subResult);
+                                offset += file.initFromBytes(chunkData, offset);
+                            }
+                        }
+                    }
+
+                    // Initialize sub-channels map in file for future updates
+                    if (fileData.otherChunks() != null) {
+                        file.initSubChannels(fileData.otherChunks());
+                    }
+
+                    // Cache content (optional, but good for performance)
+                    // Note: accessing file.getSize() might return the size of the temp file we just
+                    // wrote to
                     logger.debug(
-                            "Loaded and cached file content from blockchain: {} ({} bytes)",
+                            "Loaded file content from blockchain: {} ({} bytes)",
                             file.getAbsolutePath(),
-                            content.length);
+                            file.getSize());
                 }
             }
         } catch (Exception e) {
@@ -1149,8 +1230,10 @@ public class InMemoryFileSystem implements FileSystem {
     }
 
     public void flushFile(String path) throws PathNotFound, PathIsNotAFile {
+        logger.debug("Flushing file: {}", path);
         File file = getFileByPath(path);
         file.close();
+        logger.debug("Flushed file: {}", path);
     }
 
     // Utility methods for file/directory access
