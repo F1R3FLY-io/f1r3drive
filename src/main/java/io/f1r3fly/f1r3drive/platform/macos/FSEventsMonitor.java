@@ -9,7 +9,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * JNI integration with macOS FSEvents API for low-level filesystem monitoring.
- * Runs in separate thread with CFRunLoop and provides efficient file system event detection.
+ * Runs in separate thread with CFRunLoop and provides efficient file system
+ * event detection.
  *
  * This class bridges Java code with native macOS FSEvents through JNI calls to
  * libf1r3drive-fsevents.dylib native library.
@@ -17,8 +18,7 @@ import org.slf4j.LoggerFactory;
 public class FSEventsMonitor {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(
-        FSEventsMonitor.class
-    );
+            FSEventsMonitor.class);
 
     // Native library loading
     static {
@@ -27,17 +27,14 @@ public class FSEventsMonitor {
             LOGGER.info("Successfully loaded native FSEvents library");
         } catch (UnsatisfiedLinkError e) {
             LOGGER.error(
-                "Failed to load native FSEvents library: {}",
-                e.getMessage()
-            );
+                    "Failed to load native FSEvents library: {}",
+                    e.getMessage());
             LOGGER.error(
-                "Platform info: {}",
-                NativeLibraryLoader.getPlatformInfo()
-            );
+                    "Platform info: {}",
+                    NativeLibraryLoader.getPlatformInfo());
             throw new RuntimeException(
-                "Native FSEvents library not available",
-                e
-            );
+                    "Native FSEvents library not available",
+                    e);
         }
     }
 
@@ -51,12 +48,10 @@ public class FSEventsMonitor {
     // Event flags (from FSEvents.h)
     public static final int kFSEventStreamEventFlagItemCreated = 0x00000100;
     public static final int kFSEventStreamEventFlagItemRemoved = 0x00000200;
-    public static final int kFSEventStreamEventFlagItemInodeMetaMod =
-        0x00000400;
+    public static final int kFSEventStreamEventFlagItemInodeMetaMod = 0x00000400;
     public static final int kFSEventStreamEventFlagItemRenamed = 0x00000800;
     public static final int kFSEventStreamEventFlagItemModified = 0x00001000;
-    public static final int kFSEventStreamEventFlagItemFinderInfoMod =
-        0x00002000;
+    public static final int kFSEventStreamEventFlagItemFinderInfoMod = 0x00002000;
     public static final int kFSEventStreamEventFlagItemChangeOwner = 0x00004000;
     public static final int kFSEventStreamEventFlagItemXattrMod = 0x00008000;
     public static final int kFSEventStreamEventFlagItemIsFile = 0x00010000;
@@ -74,10 +69,9 @@ public class FSEventsMonitor {
 
     // Configuration parameters
     private double latency = 0.1; // 100ms latency
-    private int streamFlags =
-        kFSEventStreamCreateFlagFileEvents |
-        kFSEventStreamCreateFlagWatchRoot |
-        kFSEventStreamCreateFlagNoDefer;
+    private int streamFlags = kFSEventStreamCreateFlagFileEvents |
+            kFSEventStreamCreateFlagWatchRoot |
+            kFSEventStreamCreateFlagNoDefer;
 
     /**
      * Creates a new FSEventsMonitor instance.
@@ -89,14 +83,13 @@ public class FSEventsMonitor {
     /**
      * Starts monitoring the specified path for file system events.
      *
-     * @param path the path to monitor
+     * @param path     the path to monitor
      * @param listener the listener to notify of changes
      * @throws Exception if monitoring cannot be started
      */
     public synchronized void startMonitoring(
-        String path,
-        ChangeListener listener
-    ) throws Exception {
+            String path,
+            ChangeListener listener) throws Exception {
         if (isRunning.get()) {
             throw new IllegalStateException("Monitor is already running");
         }
@@ -117,9 +110,8 @@ public class FSEventsMonitor {
 
         // Create and start monitoring thread
         monitorThread = new Thread(
-            this::runEventLoop,
-            "FSEventsMonitor-" + path.hashCode()
-        );
+                this::runEventLoop,
+                "FSEventsMonitor-" + path.hashCode());
         monitorThread.setDaemon(true);
         monitorThread.start();
 
@@ -127,8 +119,7 @@ public class FSEventsMonitor {
         if (!startLatch.await(10, TimeUnit.SECONDS)) {
             stopMonitoring();
             throw new Exception(
-                "Failed to start FSEvents monitoring within timeout"
-            );
+                    "Failed to start FSEvents monitoring within timeout");
         }
 
         if (!isInitialized.get()) {
@@ -137,9 +128,8 @@ public class FSEventsMonitor {
         }
 
         LOGGER.info(
-            "FSEvents monitoring started successfully for path: {}",
-            path
-        );
+                "FSEvents monitoring started successfully for path: {}",
+                path);
     }
 
     /**
@@ -165,15 +155,13 @@ public class FSEventsMonitor {
             try {
                 if (!stopLatch.await(5, TimeUnit.SECONDS)) {
                     LOGGER.warn(
-                        "FSEvents monitoring thread did not stop gracefully, interrupting"
-                    );
+                            "FSEvents monitoring thread did not stop gracefully, interrupting");
                     monitorThread.interrupt();
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 LOGGER.warn(
-                    "Interrupted while waiting for monitoring thread to stop"
-                );
+                        "Interrupted while waiting for monitoring thread to stop");
             }
         }
 
@@ -198,8 +186,7 @@ public class FSEventsMonitor {
     public void setLatency(double latency) {
         if (isRunning.get()) {
             throw new IllegalStateException(
-                "Cannot change latency while monitoring is active"
-            );
+                    "Cannot change latency while monitoring is active");
         }
         this.latency = latency;
     }
@@ -212,8 +199,7 @@ public class FSEventsMonitor {
     public void setAdditionalStreamFlags(int flags) {
         if (isRunning.get()) {
             throw new IllegalStateException(
-                "Cannot change flags while monitoring is active"
-            );
+                    "Cannot change flags while monitoring is active");
         }
         this.streamFlags |= flags;
     }
@@ -224,9 +210,8 @@ public class FSEventsMonitor {
     private void runEventLoop() {
         try {
             LOGGER.debug(
-                "Starting FSEvents run loop for path: {}",
-                watchedPath
-            );
+                    "Starting FSEvents run loop for path: {}",
+                    watchedPath);
 
             isRunning.set(true);
 
@@ -235,9 +220,8 @@ public class FSEventsMonitor {
 
             if (streamRef == 0) {
                 LOGGER.error(
-                    "Failed to create FSEvents stream for path: {}",
-                    watchedPath
-                );
+                        "Failed to create FSEvents stream for path: {}",
+                        watchedPath);
                 isInitialized.set(false);
                 startLatch.countDown();
                 return;
@@ -294,15 +278,14 @@ public class FSEventsMonitor {
      * Callback method called from native code when file system events occur.
      * This method is called from the native FSEvents callback function.
      *
-     * @param paths array of file paths that changed
-     * @param flags array of event flags for each path
+     * @param paths    array of file paths that changed
+     * @param flags    array of event flags for each path
      * @param eventIds array of event IDs for each path
      */
     private void onFileSystemEvent(
-        String[] paths,
-        int[] flags,
-        long[] eventIds
-    ) {
+            String[] paths,
+            int[] flags,
+            long[] eventIds) {
         if (changeListener == null || !isRunning.get()) {
             return;
         }
@@ -312,12 +295,44 @@ public class FSEventsMonitor {
             int eventFlags = flags[i];
             long eventId = eventIds[i];
 
+            boolean isRenamed = (eventFlags & kFSEventStreamEventFlagItemRenamed) != 0;
+
+            if (isRenamed) {
+                // Check for rename pair (consecutive events)
+                // Note: FSEvents usually sends the old name then the new name with sequential
+                // IDs
+                if (i + 1 < paths.length &&
+                        (flags[i + 1] & kFSEventStreamEventFlagItemRenamed) != 0 &&
+                        eventIds[i + 1] == eventId + 1) {
+
+                    String nextPath = paths[i + 1];
+                    LOGGER.debug("FSEvent: RENAME DETECTED: {} -> {}", path, nextPath);
+                    changeListener.onFileMoved(path, nextPath);
+                    i++; // Skip next event as it's processed
+                    continue;
+                } else {
+                    // Orphan rename event
+                    // If file exists, it's likely a Move In or Rename Destination (without Source)
+                    // -> Create
+                    // If file doesn't exist, it's likely a Move Out or Refname Source (without
+                    // Dest) -> Delete
+                    boolean exists = new java.io.File(path).exists();
+                    LOGGER.debug("FSEvent: ORPHAN RENAME: {} (exists={})", path, exists);
+
+                    if (exists) {
+                        changeListener.onFileCreated(path);
+                    } else {
+                        changeListener.onFileDeleted(path);
+                    }
+                    continue;
+                }
+            }
+
             LOGGER.debug(
-                "FSEvent: path={}, flags=0x{}, eventId={}",
-                path,
-                Integer.toHexString(eventFlags),
-                eventId
-            );
+                    "FSEvent: path={}, flags=0x{}, eventId={}",
+                    path,
+                    Integer.toHexString(eventFlags),
+                    eventId);
 
             try {
                 processEvent(path, eventFlags);
@@ -328,15 +343,10 @@ public class FSEventsMonitor {
         }
     }
 
-    /**
-     * Processes a single file system event and dispatches to appropriate listener methods.
-     *
-     * @param path the path where the event occurred
-     * @param flags the event flags
-     */
     private void processEvent(String path, int flags) {
-        // Handle creation
-        if ((flags & kFSEventStreamEventFlagItemCreated) != 0) {
+        // Handle creation (ignore if also Renamed, as that's handled in loop)
+        if ((flags & kFSEventStreamEventFlagItemCreated) != 0 &&
+                (flags & kFSEventStreamEventFlagItemRenamed) == 0) {
             changeListener.onFileCreated(path);
         }
 
@@ -350,22 +360,14 @@ public class FSEventsMonitor {
             changeListener.onFileModified(path);
         }
 
-        // Handle rename (macOS FSEvents treats moves as renames)
-        if ((flags & kFSEventStreamEventFlagItemRenamed) != 0) {
-            // For renames, we only get the new path, so we treat it as a creation
-            // The old path would have been reported as removed in a separate event
-            changeListener.onFileCreated(path);
-        }
+        // Rename logic is now handled in onFileSystemEvent loop
 
         // Handle attribute changes
-        if (
-            (flags &
+        if ((flags &
                 (kFSEventStreamEventFlagItemInodeMetaMod |
-                    kFSEventStreamEventFlagItemFinderInfoMod |
-                    kFSEventStreamEventFlagItemChangeOwner |
-                    kFSEventStreamEventFlagItemXattrMod)) !=
-            0
-        ) {
+                        kFSEventStreamEventFlagItemFinderInfoMod |
+                        kFSEventStreamEventFlagItemChangeOwner |
+                        kFSEventStreamEventFlagItemXattrMod)) != 0) {
             changeListener.onFileAttributesChanged(path);
         }
     }
@@ -380,21 +382,21 @@ public class FSEventsMonitor {
         }
     }
 
-    // Native method declarations - these are implemented in libf1r3drive-fsevents.dylib
+    // Native method declarations - these are implemented in
+    // libf1r3drive-fsevents.dylib
 
     /**
      * Creates a native FSEvents stream.
      *
-     * @param path the path to watch
+     * @param path    the path to watch
      * @param latency the stream latency in seconds
-     * @param flags the stream creation flags
+     * @param flags   the stream creation flags
      * @return native stream reference or 0 on failure
      */
     private native long nativeCreateStream(
-        String path,
-        double latency,
-        int flags
-    );
+            String path,
+            double latency,
+            int flags);
 
     /**
      * Schedules the stream on the current thread's run loop.

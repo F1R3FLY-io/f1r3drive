@@ -917,20 +917,17 @@ public class InMemoryFileSystem implements FileSystem {
         Directory oldParent = p.getParent();
         String lastComponent = getLastComponent(newName);
 
+        // 1. Remove from old parent (triggers blockchain update for children list)
+        oldParent.deleteChild(p);
+
+        // 2. Rename (triggers blockchain channel move via
+        // AbstractDeployablePath.rename)
         p.rename(lastComponent, newParent);
 
-        if (oldParent != newParent) {
-            newParent.addChild(p);
-            oldParent.deleteChild(p);
-        } else {
-            newParent.addChild(p);
-        }
+        // 3. Add to new parent (triggers blockchain update for children list)
+        newParent.addChild(p);
 
-        // Trigger blockchain update for renamed files
-        if (p instanceof BlockchainFile) {
-            ((BlockchainFile) p).onChange();
-            logger.debug("Blockchain file renamed: {} -> {}", path, newName);
-        }
+        // Redundant onChange() call removed as p.rename() handles the channel move
 
         // Sync with FileProvider if available
         if (fileProviderIntegration != null &&
