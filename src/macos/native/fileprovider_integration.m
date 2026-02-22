@@ -174,7 +174,8 @@ Java_io_f1r3fly_f1r3drive_platform_macos_FileProviderIntegration_nativeCreatePla
     }
     
     FileProviderContext *context = (FileProviderContext *)contextRef;
-    NSString *nsPath = JStringToNSString(env, path);
+    NSString *nsRelativePath = JStringToNSString(env, path);
+    NSString *nsPath = [context->rootPath stringByAppendingPathComponent:nsRelativePath];
     
     // Create placeholder file with minimal content
     NSData *placeholderData = [@"F1r3Drive placeholder file - content will be loaded on access" 
@@ -240,7 +241,8 @@ Java_io_f1r3fly_f1r3drive_platform_macos_FileProviderIntegration_nativeMateriali
     }
     
     FileProviderContext *context = (FileProviderContext *)contextRef;
-    NSString *nsPath = JStringToNSString(env, path);
+    NSString *nsRelativePath = JStringToNSString(env, path);
+    NSString *nsPath = [context->rootPath stringByAppendingPathComponent:nsRelativePath];
     
     // Get content from Java byte array
     jsize contentLength = (*env)->GetArrayLength(env, content);
@@ -280,7 +282,8 @@ Java_io_f1r3fly_f1r3drive_platform_macos_FileProviderIntegration_nativeUpdatePla
     }
     
     FileProviderContext *context = (FileProviderContext *)contextRef;
-    NSString *nsPath = JStringToNSString(env, path);
+    NSString *nsRelativePath = JStringToNSString(env, path);
+    NSString *nsPath = [context->rootPath stringByAppendingPathComponent:nsRelativePath];
     
     // Update file attributes
     NSMutableDictionary *attributes = [NSMutableDictionary dictionary];
@@ -318,7 +321,8 @@ Java_io_f1r3fly_f1r3drive_platform_macos_FileProviderIntegration_nativeRemovePla
     }
     
     FileProviderContext *context = (FileProviderContext *)contextRef;
-    NSString *nsPath = JStringToNSString(env, path);
+    NSString *nsRelativePath = JStringToNSString(env, path);
+    NSString *nsPath = [context->rootPath stringByAppendingPathComponent:nsRelativePath];
     
     NSError *error = nil;
     BOOL success = [[NSFileManager defaultManager] removeItemAtPath:nsPath error:&error];

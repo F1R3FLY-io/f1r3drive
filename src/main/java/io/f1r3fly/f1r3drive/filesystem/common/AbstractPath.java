@@ -25,7 +25,7 @@ public abstract class AbstractPath implements Path {
     }
 
     protected void refreshLastUpdated() {
-        this.lastUpdated = System.currentTimeMillis() / 1000;
+        this.lastUpdated = System.currentTimeMillis();
     }
 
     @Override
@@ -60,6 +60,13 @@ public abstract class AbstractPath implements Path {
         this.name = newName;
         this.parent = newParent;
         refreshLastUpdated();
+    }
+
+    @Override
+    public void getAttr(io.f1r3fly.f1r3drive.filesystem.bridge.FSFileStat stat, io.f1r3fly.f1r3drive.filesystem.bridge.FSContext context) {
+        stat.setModificationTime(lastUpdated);
+        stat.setUid(context.getUid());
+        stat.setGid(context.getGid());
     }
 
     @Override

@@ -259,10 +259,13 @@ public class RholangExpressionConstructor {
             .map(kv -> kv.getValue().getExprs(0).getGString())
             .orElseThrow(() -> new IllegalArgumentException("No type in channel data"));
 
-        long lastUpdated = keyValues.stream().filter(kv -> kv.getKey().getExprs(0).getGString().equals(LAST_UPDATED))
+        long lastUpdatedRaw = keyValues.stream().filter(kv -> kv.getKey().getExprs(0).getGString().equals(LAST_UPDATED))
             .findFirst()
             .map(kv -> kv.getValue().getExprs(0).getGInt())
             .orElseThrow(() -> new IllegalArgumentException("No lastUpdated in channel data"));
+
+        // AUTO-CALIBRATION: If value is in seconds (legacy), convert to milliseconds
+        long lastUpdated = lastUpdatedRaw < 10000000000L ? lastUpdatedRaw * 1000 : lastUpdatedRaw;
 
         byte[] content = null;
         Set<String> children = null;

@@ -41,7 +41,7 @@ public abstract class AbstractDeployablePath extends AbstractPath {
         String oldPath = getAbsolutePath();
         super.rename(newName, newParent);
         String newPath = getAbsolutePath();
-        enqueueMutation(RholangExpressionConstructor.renameChanel(oldPath, newPath, getLastUpdated()));
+        enqueueMutation(RholangExpressionConstructor.renameChanel(oldPath, newPath, getLastUpdated() / 1000));
     }
 
 }

@@ -64,7 +64,7 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
 
     private void enqueueCreatingFile() {
         refreshLastUpdated();
-        String rholang = RholangExpressionConstructor.sendEmptyFileIntoNewChanel(getAbsolutePath(), getLastUpdated());
+        String rholang = RholangExpressionConstructor.sendEmptyFileIntoNewChanel(getAbsolutePath(), getLastUpdated() / 1000);
         enqueueMutation(rholang);
     }
 
@@ -367,7 +367,22 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
     }
 
     @Override
+    public void getAttr(io.f1r3fly.f1r3drive.filesystem.bridge.FSFileStat stat, io.f1r3fly.f1r3drive.filesystem.bridge.FSContext context) {
+        super.getAttr(stat, context);
+        stat.setSize(getSize());
+        // Default mode for files: 0100644 (regular file, rw-r--r--)
+        stat.setMode(0100644);
+    }
+
+    @Override
     public synchronized void delete() {
+        if (rif != null) {
+            try {
+                rif.close();
+            } catch (IOException e) {
+                // ignore
+            }
+        }
         cachedFile.delete();
         super.delete();
     }
