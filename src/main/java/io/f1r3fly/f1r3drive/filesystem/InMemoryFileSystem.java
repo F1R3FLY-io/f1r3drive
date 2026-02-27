@@ -917,19 +917,39 @@ public class InMemoryFileSystem implements FileSystem {
         Directory oldParent = p.getParent();
         String lastComponent = getLastComponent(newName);
 
-        // 1. Remove from old parent (triggers blockchain update for children list)
+        // 1. Log the intention
+        logger.debug("Initiating atomic rename for {} to {}", path, newName);
+
+        // 2. Perform local in-memory structure update
         oldParent.deleteChild(p);
-
-        // 2. Rename (triggers blockchain channel move via
-        // AbstractDeployablePath.rename)
         p.rename(lastComponent, newParent);
-
-        // 3. Add to new parent (triggers blockchain update for children list)
         newParent.addChild(p);
 
-        // Redundant onChange() call removed as p.rename() handles the channel move
+        // 3. Prepare atomic blockchain update
+        if (p instanceof io.f1r3fly.f1r3drive.filesystem.deployable.AbstractDeployablePath) {
+            byte[] signingKey = p.getSigningKey();
+            io.f1r3fly.f1r3drive.blockchain.wallet.RevWalletInfo walletInfo = p.getBlockchainContext().getWalletInfo();
+            
+            if (signingKey == null) {
+                logger.error("Cannot perform atomic rename: Signing key is missing for path {}", path);
+                throw io.f1r3fly.f1r3drive.errors.OperationNotPermitted.instance;
+            }
 
-        // Sync with FileProvider if available
+            String rho = io.f1r3fly.f1r3drive.blockchain.rholang.RholangExpressionConstructor.atomicRename(
+                path, 
+                newName, 
+                oldParent.getAbsolutePath(), 
+                oldParent.getChildren().stream().map(io.f1r3fly.f1r3drive.filesystem.common.Path::getName).collect(java.util.stream.Collectors.toSet()),
+                System.currentTimeMillis() / 1000
+            );
+            
+            // Send single atomic deployment
+            deployDispatcher.enqueueDeploy(new io.f1r3fly.f1r3drive.blockchain.client.DeployDispatcher.Deployment(
+                rho, true, "rholang", walletInfo.revAddress(), signingKey, System.currentTimeMillis()
+            ));
+        }
+
+        // 4. Sync with FileProvider if available
         if (fileProviderIntegration != null &&
                 fileProviderIntegration.isInitialized()) {
             // Remove old placeholder
@@ -968,32 +988,39 @@ public class InMemoryFileSystem implements FileSystem {
         }
 
         // Remove from blockchain if it's a blockchain directory
-        if (directory instanceof UnlockedWalletDirectory) {
-            UnlockedWalletDirectory blockchainDir = (UnlockedWalletDirectory) directory;
-            // Queue blockchain removal operation
-            String rholang = RholangExpressionConstructor.forgetChanel(
-                    directory.getAbsolutePath());
-            // Queue deployment via dispatcher
-            try {
-                deployDispatcher.enqueueDeploy(
-                        new io.f1r3fly.f1r3drive.blockchain.client.DeployDispatcher.Deployment(
-                                rholang,
-                                false,
-                                "rholang",
-                                null, // rev address not needed for deletion
-                                null, // signing key not needed for deletion
-                                System.currentTimeMillis()));
-            } catch (Exception e) {
-                logger.warn("Failed to queue directory removal deployment", e);
+        if (directory instanceof io.f1r3fly.f1r3drive.filesystem.deployable.AbstractDeployablePath) {
+            byte[] signingKey = directory.getSigningKey();
+            if (signingKey == null) {
+                throw new IllegalStateException("Cannot delete directory: signing key missing for path " + path);
             }
-            logger.debug("Queued blockchain directory removal: {}", path);
+
+            Directory parent = directory.getParent();
+            if (parent != null) {
+                // Perform local in-memory removal to get new children list
+                parent.deleteChild(directory);
+
+                String rholang = io.f1r3fly.f1r3drive.blockchain.rholang.RholangExpressionConstructor.atomicDelete(
+                        directory.getAbsolutePath(),
+                        parent.getAbsolutePath(),
+                        parent.getChildren().stream().map(io.f1r3fly.f1r3drive.filesystem.common.Path::getName).collect(java.util.stream.Collectors.toSet()),
+                        System.currentTimeMillis() / 1000
+                );
+
+                // Queue single atomic deployment
+                deployDispatcher.enqueueDeploy(new io.f1r3fly.f1r3drive.blockchain.client.DeployDispatcher.Deployment(
+                        rholang,
+                        true,
+                        io.f1r3fly.f1r3drive.blockchain.client.F1r3flyBlockchainClient.RHOLANG,
+                        directory.getBlockchainContext().getWalletInfo().revAddress(),
+                        signingKey,
+                        System.currentTimeMillis()));
+                
+                logger.debug("Queued atomic blockchain directory removal: {}", path);
+            }
         }
 
+        // Final local cleanup
         directory.delete();
-        Directory parent = directory.getParent();
-        if (parent != null) {
-            parent.deleteChild(directory);
-        }
 
         // Sync with FileProvider if available
         if (fileProviderIntegration != null &&
@@ -1039,39 +1066,39 @@ public class InMemoryFileSystem implements FileSystem {
         Path p = getPath(path);
 
         // Remove from blockchain if it's a blockchain file
-        if (p instanceof BlockchainFile) {
-            BlockchainFile blockchainFile = (BlockchainFile) p;
-
-            // Record operation cost
-            String walletAddress = blockchainFile
-                    .getBlockchainContext()
-                    .getWalletInfo()
-                    .revAddress();
-            TokenDirectory.recordOperationCost(walletAddress, "DELETE_FILE");
-
-            String rholang = RholangExpressionConstructor.forgetChanel(
-                    p.getAbsolutePath());
-            // Queue deployment via dispatcher
-            try {
-                deployDispatcher.enqueueDeploy(
-                        new io.f1r3fly.f1r3drive.blockchain.client.DeployDispatcher.Deployment(
-                                rholang,
-                                false,
-                                "rholang",
-                                null, // rev address not needed for deletion
-                                null, // signing key not needed for deletion
-                                System.currentTimeMillis()));
-            } catch (Exception e) {
-                logger.warn("Failed to queue file removal deployment", e);
+        if (p instanceof io.f1r3fly.f1r3drive.filesystem.deployable.BlockchainFile) {
+            byte[] signingKey = p.getSigningKey();
+            if (signingKey == null) {
+                throw new IllegalStateException("Cannot delete file: signing key missing for path " + path);
             }
-            logger.debug("Queued blockchain file removal: {}", path);
+
+            Directory parent = p.getParent();
+            if (parent != null) {
+                // Perform local in-memory removal to get new children list
+                parent.deleteChild(p);
+                
+                String rholang = io.f1r3fly.f1r3drive.blockchain.rholang.RholangExpressionConstructor.atomicDelete(
+                        p.getAbsolutePath(),
+                        parent.getAbsolutePath(),
+                        parent.getChildren().stream().map(io.f1r3fly.f1r3drive.filesystem.common.Path::getName).collect(java.util.stream.Collectors.toSet()),
+                        System.currentTimeMillis() / 1000
+                );
+
+                // Queue single atomic deployment
+                deployDispatcher.enqueueDeploy(new io.f1r3fly.f1r3drive.blockchain.client.DeployDispatcher.Deployment(
+                        rholang,
+                        true,
+                        io.f1r3fly.f1r3drive.blockchain.client.F1r3flyBlockchainClient.RHOLANG,
+                        p.getBlockchainContext().getWalletInfo().revAddress(),
+                        signingKey,
+                        System.currentTimeMillis()));
+                
+                logger.debug("Queued atomic blockchain file removal: {}", path);
+            }
         }
 
+        // Final local cleanup
         p.delete();
-        Directory parent = p.getParent();
-        if (parent != null) {
-            parent.deleteChild(p);
-        }
 
         // Sync with FileProvider if available
         if (fileProviderIntegration != null &&

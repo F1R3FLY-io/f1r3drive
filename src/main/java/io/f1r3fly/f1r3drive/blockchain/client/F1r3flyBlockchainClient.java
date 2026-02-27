@@ -494,6 +494,9 @@ public class F1r3flyBlockchainClient {
         CasperMessage.DeployDataProto deploy,
         byte[] signingKey
     ) {
+        if (signingKey == null) {
+            throw new IllegalArgumentException("Private key is missing for deployment signing");
+        }
         final MessageDigest digest;
 
         try {

@@ -131,14 +131,24 @@ public class F1r3DriveChangeListener implements ChangeListener {
 
                 // Determine if directory or file
                 Path p = Paths.get(path);
+                if (!Files.exists(p)) {
+                    LOGGER.warn("CHANGE_LISTENER_CREATE_CANCELLED: File disappeared: {}", path);
+                    return;
+                }
+
                 if (Files.isDirectory(p)) {
                     // mode 0755
                     fileSystem.makeDirectory(relativePath, 0755L);
                 } else {
                     // READ CONTENT FIRST to avoid reading the placeholder overwritten by createFile
                     byte[] content = null;
-                    if (Files.exists(p) && Files.size(p) > 0) {
-                        content = Files.readAllBytes(p);
+                    try {
+                        if (Files.size(p) > 0) {
+                            content = Files.readAllBytes(p);
+                        }
+                    } catch (java.nio.file.NoSuchFileException e) {
+                        LOGGER.warn("CHANGE_LISTENER_CREATE_CANCELLED: File disappeared during read: {}", path);
+                        return;
                     }
 
                     // Create file in FileSystem
@@ -194,11 +204,15 @@ public class F1r3DriveChangeListener implements ChangeListener {
                         "CHANGE_LISTENER_SYNC: File modified, sinking to blockchain: {}",
                         relativePath);
                 Path p = Paths.get(path);
-                if (!Files.isDirectory(p)) {
-                    byte[] content = Files.readAllBytes(p);
-                    io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer ptr = wrapBytes(content);
-                    fileSystem.writeFile(relativePath, ptr, content.length, 0);
-                    fileSystem.flushFile(relativePath);
+                if (Files.exists(p) && !Files.isDirectory(p)) {
+                    try {
+                        byte[] content = Files.readAllBytes(p);
+                        io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer ptr = wrapBytes(content);
+                        fileSystem.writeFile(relativePath, ptr, content.length, 0);
+                        fileSystem.flushFile(relativePath);
+                    } catch (java.nio.file.NoSuchFileException e) {
+                        LOGGER.warn("CHANGE_LISTENER_SYNC_CANCELLED: File disappeared before read: {}", path);
+                    }
                 }
             }
         } catch (Exception e) {

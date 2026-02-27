@@ -43,7 +43,7 @@ public class UnlockedWalletDirectory extends BlockchainDirectory {
                     Set.of(),
                     getLastUpdated()
                 );
-            enqueueMutation(rholang);
+            enqueueMutation(rholang, getSigningKey());
         }
 
         // create token directory

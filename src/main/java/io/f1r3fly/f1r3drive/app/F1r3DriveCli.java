@@ -135,6 +135,9 @@ class F1r3DriveCli implements Callable<Integer> {
                 manualPropose
             );
 
+        // GRACE PERIOD: Allow gRPC channels to stabilize before sending requests
+        try { Thread.sleep(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
         // Initialize blockchain folder integration system
         if (!disableTokenDiscovery) {
             LOGGER.info("Initializing blockchain token discovery system...");
@@ -295,6 +298,14 @@ class F1r3DriveCli implements Callable<Integer> {
     // this example implements Callable, so parsing, error handling and handling user
     // requests for usage help or version help can be done with one line of code.
     public static void main(String... args) {
+        // PRE-LOAD: Force load Picocli classes to prevent NoClassDefFoundError on violent shutdown
+        try {
+            Class.forName("picocli.CommandLine$IExitCodeGenerator");
+            Class.forName("picocli.CommandLine$AbstractParseResultHandler");
+        } catch (ClassNotFoundException e) {
+            // Ignore
+        }
+
         LOGGER.info(
             "F1r3Drive CLI starting with arguments: {}",
             java.util.Arrays.toString(args)

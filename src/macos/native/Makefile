@@ -19,10 +19,11 @@ JNI_INCLUDES = -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/darwin
 
 # Compiler configuration
 CC = clang
-CFLAGS = -Wall -Wextra -O2 -fPIC $(JNI_INCLUDES)
-OBJC_FLAGS = -Wall -Wextra -O2 -fPIC $(JNI_INCLUDES) -fobjc-arc
-FSEVENTS_LDFLAGS = -dynamiclib -framework CoreServices -framework CoreFoundation
-FILEPROVIDER_LDFLAGS = -dynamiclib -framework FileProvider -framework Foundation -framework CoreFoundation
+ARCH_FLAGS = -arch x86_64 -arch arm64
+CFLAGS = -Wall -Wextra -O2 -fPIC $(JNI_INCLUDES) $(ARCH_FLAGS)
+OBJC_FLAGS = -Wall -Wextra -O2 -fPIC $(JNI_INCLUDES) -fobjc-arc $(ARCH_FLAGS)
+FSEVENTS_LDFLAGS = -dynamiclib -framework CoreServices -framework CoreFoundation $(ARCH_FLAGS)
+FILEPROVIDER_LDFLAGS = -dynamiclib -framework FileProvider -framework Foundation -framework CoreFoundation $(ARCH_FLAGS)
 
 # Build directory
 BUILD_DIR = ../../../build/native/macos

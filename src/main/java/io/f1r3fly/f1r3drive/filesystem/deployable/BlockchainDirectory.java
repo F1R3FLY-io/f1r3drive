@@ -32,9 +32,10 @@ public class BlockchainDirectory extends AbstractDeployablePath implements Direc
             boolean sendToShard) {
         super(blockchainContext, name, parent);
         if (sendToShard) {
+            byte[] key = getSigningKey();
             String rholang = RholangExpressionConstructor.sendDirectoryIntoNewChannel(getAbsolutePath(), Set.of(),
-                    getLastUpdated());
-            enqueueMutation(rholang);
+                    getLastUpdated() / 1000);
+            enqueueMutation(rholang, key);
         }
     }
 
@@ -104,6 +105,7 @@ public class BlockchainDirectory extends AbstractDeployablePath implements Direc
     }
 
     private void enqueueUpdatingChildrenList() {
+        byte[] key = getSigningKey();
         Set<String> newChildren = children.stream()
                 .filter((x) -> x instanceof AbstractDeployablePath)
                 .map(Path::getName)
@@ -111,9 +113,9 @@ public class BlockchainDirectory extends AbstractDeployablePath implements Direc
         String rholang = RholangExpressionConstructor.updateChildren(
                 getAbsolutePath(),
                 newChildren,
-                getLastUpdated());
+                getLastUpdated() / 1000);
 
-        enqueueMutation(rholang);
+        enqueueMutation(rholang, key);
     }
 
     @Override

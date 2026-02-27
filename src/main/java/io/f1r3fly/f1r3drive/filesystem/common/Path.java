@@ -40,6 +40,8 @@ public interface Path {
 
     @NotNull Long getLastUpdated();
 
+    byte[] getSigningKey();
+
     @Nullable
     Directory getParent();
 

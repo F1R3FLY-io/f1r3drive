@@ -70,6 +70,17 @@ public abstract class AbstractPath implements Path {
     }
 
     @Override
+    public byte[] getSigningKey() {
+        if (blockchainContext != null && blockchainContext.getWalletInfo().signingKey() != null) {
+            return blockchainContext.getWalletInfo().signingKey();
+        }
+        if (parent != null) {
+            return parent.getSigningKey();
+        }
+        throw new IllegalStateException("Critical Error: Signing key not found in the hierarchy for path: " + getAbsolutePath());
+    }
+
+    @Override
     public BlockchainContext getBlockchainContext() {
         return blockchainContext;
     }

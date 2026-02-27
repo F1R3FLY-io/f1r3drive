@@ -15,15 +15,19 @@ public abstract class AbstractDeployablePath extends AbstractPath {
         super(blockchainContext, name, parent);
     }
 
-    protected void enqueueMutation(String rholangExpression) {
+    protected void enqueueMutation(String rholangExpression, byte[] signingKey) {
+        RevWalletInfo walletInfo = getBlockchainContext().getWalletInfo();
+        
+        if (signingKey == null) {
+            throw new IllegalStateException("Cannot sign blockchain mutation: private key missing for " + getAbsolutePath());
+        }
 
-        RevWalletInfo revWalletInfo = getBlockchainContext().getWalletInfo();
         DeployDispatcher.Deployment deployment = new DeployDispatcher.Deployment(
                 rholangExpression,
                 true,
                 F1r3flyBlockchainClient.RHOLANG,
-                revWalletInfo.revAddress(),
-                revWalletInfo.signingKey(),
+                walletInfo.revAddress(),
+                signingKey,
                 System.currentTimeMillis());
 
         getBlockchainContext().getDeployDispatcher().enqueueDeploy(deployment);
@@ -31,17 +35,19 @@ public abstract class AbstractDeployablePath extends AbstractPath {
 
     @Override
     public synchronized void delete() {
+        byte[] key = getSigningKey();
         refreshLastUpdated();
         String rholangExpression = RholangExpressionConstructor.forgetChanel(getAbsolutePath());
-        enqueueMutation(rholangExpression);
+        enqueueMutation(rholangExpression, key);
     }
 
     @Override
     public void rename(String newName, Directory newParent) throws OperationNotPermitted {
+        byte[] key = getSigningKey();
         String oldPath = getAbsolutePath();
         super.rename(newName, newParent);
         String newPath = getAbsolutePath();
-        enqueueMutation(RholangExpressionConstructor.renameChanel(oldPath, newPath, getLastUpdated() / 1000));
+        enqueueMutation(RholangExpressionConstructor.renameChanel(oldPath, newPath, getLastUpdated() / 1000), key);
     }
 
 }

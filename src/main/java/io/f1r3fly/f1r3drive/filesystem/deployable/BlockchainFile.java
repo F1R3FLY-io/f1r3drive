@@ -63,9 +63,10 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
     }
 
     private void enqueueCreatingFile() {
+        byte[] key = getSigningKey();
         refreshLastUpdated();
         String rholang = RholangExpressionConstructor.sendEmptyFileIntoNewChanel(getAbsolutePath(), getLastUpdated() / 1000);
-        enqueueMutation(rholang);
+        enqueueMutation(rholang, key);
     }
 
     private void markDirty(String reason) {
@@ -111,9 +112,9 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
         cachedFile = Files.createTempFile(name, null).toFile();
 
         refreshLastUpdated();
-        enqueueMutation(RholangExpressionConstructor.forgetChanel(getAbsolutePath()));
+        enqueueMutation(RholangExpressionConstructor.forgetChanel(getAbsolutePath()), getSigningKey());
         otherChunks.forEach((chunkNumber, subChannel) -> {
-            enqueueMutation(RholangExpressionConstructor.forgetChanel(subChannel));
+            enqueueMutation(RholangExpressionConstructor.forgetChanel(subChannel), getSigningKey());
         });
 
         otherChunks = new ConcurrentHashMap<>();
@@ -196,6 +197,7 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
 
         int chunkNumber = (int) (lastDeploymentOffset / MAX_FILE_CHUNK_SIZE);
         String rholang;
+        byte[] key = getSigningKey();
         if (chunkNumber == 0) {
             rholang = RholangExpressionConstructor.updateFileContent(getAbsolutePath(), bytes);
         } else {
@@ -205,7 +207,7 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
             isOtherChunksDeployed = false;
         }
         refreshLastUpdated();
-        enqueueMutation(rholang);
+        enqueueMutation(rholang, key);
 
         lastDeploymentOffset = lastDeploymentOffset + size;
     }
@@ -245,7 +247,7 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
             if (!isOtherChunksDeployed) {
                 if (!otherChunks.isEmpty()) {
                     refreshLastUpdated();
-                    enqueueMutation(RholangExpressionConstructor.updateOtherChunksMap(getAbsolutePath(), otherChunks));
+                    enqueueMutation(RholangExpressionConstructor.updateOtherChunksMap(getAbsolutePath(), otherChunks), getSigningKey());
                 }
                 isOtherChunksDeployed = true;
             }
@@ -293,9 +295,10 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
         if (isDirty) {
             if (isDeployable()) {
                 try {
+                    byte[] key = getSigningKey();
                     refreshLastUpdated();
                     String rholangExpression = Files.readString(cachedFile.toPath());
-                    enqueueMutation(rholangExpression); // deploy a file as rho expression
+                    enqueueMutation(rholangExpression, key); // deploy a file as rho expression
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -322,7 +325,7 @@ public class BlockchainFile extends AbstractDeployablePath implements File {
         boolean needDecrypt = wasEncrypted && !willBeEncrypted;
 
         if (needEncrypt || needDecrypt) {
-            enqueueMutation(RholangExpressionConstructor.forgetChanel(getAbsolutePath())); // delete old
+            enqueueMutation(RholangExpressionConstructor.forgetChanel(getAbsolutePath()), getSigningKey()); // delete old
 
             this.name = newName;
             this.parent = newParent;

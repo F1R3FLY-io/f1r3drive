@@ -135,6 +135,36 @@ public class RholangExpressionConstructor {
             .toString();
     }
 
+    //** Atomic Rename: Consume from old, send to new, and update parent children list */
+    public static String atomicRename(String oldChanel, String newChanel, String parentChanel, Set<String> newChildren, long lastUpdated) {
+        // output looks like:
+        // for(@v <- @"oldPath"; @p <- @"parentPath"){
+        //      @"newPath"!(v) |
+        //      @"parentPath"!(p.set("children", ["new","list"]).set("lastUpdated", 123))
+        // }
+
+        return new StringBuilder()
+            .append("for(@v <- @\"")
+            .append(oldChanel)
+            .append("\"; @p <- @\"")
+            .append(parentChanel)
+            .append("\"){")
+            .append("@\"")
+            .append(newChanel)
+            .append("\"!(v) | @\"")
+            .append(parentChanel)
+            .append("\"!(p.set(\"")
+            .append(CHILDREN)
+            .append("\",")
+            .append(set2String(newChildren))
+            .append(").set(\"")
+            .append(LAST_UPDATED)
+            .append("\",")
+            .append(lastUpdated)
+            .append("))}")
+            .toString();
+    }
+
     //** Consume a value from old chanel and send to a new one */
     public static String renameChanel(String oldChanel, String newChanel, long lastUpdated) {
         // output looks like:
@@ -153,8 +183,38 @@ public class RholangExpressionConstructor {
             .toString();
     }
 
+    //** Atomic Delete: Consume from channel and update parent children list */
+    public static String atomicDelete(String chanel, String parentChanel, Set<String> newChildren, long lastUpdated) {
+        // output looks like:
+        // for(@v <- @"path"; @p <- @"parentPath"){
+        //      @"parentPath"!(p.set("children", ["new","list"]).set("lastUpdated", 123))
+        // }
+        return new StringBuilder()
+            .append("for(@_ <- @\"")
+            .append(chanel)
+            .append("\"; @p <- @\"")
+            .append(parentChanel)
+            .append("\"){")
+            .append("@\"")
+            .append(parentChanel)
+            .append("\"!(p.set(\"")
+            .append(CHILDREN)
+            .append("\",")
+            .append(set2String(newChildren))
+            .append(").set(\"")
+            .append(LAST_UPDATED)
+            .append("\",")
+            .append(lastUpdated)
+            .append("))}")
+            .toString();
+    }
+
     //** Consume a value from a channel and send to an appended value */
     public static String updateFileContent(String chanel, byte[] newChunk) {
+        // SURGICAL GUARD: Ensure chunk is within safe gRPC limits (max 4MB hex string -> 2MB bytes)
+        if (newChunk.length > 2 * 1024 * 1024) {
+            throw new IllegalArgumentException("Chunk size exceeds safe 2MB limit for Rholang transmission");
+        }
         // output looks like:
         // for(@v <- @"path"){
         //      @"path"!(v.set("firstChunk", "base16encodedChunk".hexToBytes()))

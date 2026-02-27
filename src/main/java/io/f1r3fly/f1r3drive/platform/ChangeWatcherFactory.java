@@ -1242,6 +1242,14 @@ public class ChangeWatcherFactory {
             }
 
             @Override
+            public byte[] getSigningKey() {
+                if (blockchainContext != null && blockchainContext.getWalletInfo().signingKey() != null) {
+                    return blockchainContext.getWalletInfo().signingKey();
+                }
+                return null;
+            }
+
+            @Override
             public String getAbsolutePath() {
                 return "/";
             }
@@ -1295,6 +1303,17 @@ public class ChangeWatcherFactory {
                 this.name = name;
                 this.parent = parent;
                 this.blockchainContext = blockchainContext;
+            }
+
+            @Override
+            public byte[] getSigningKey() {
+                if (blockchainContext != null && blockchainContext.getWalletInfo().signingKey() != null) {
+                    return blockchainContext.getWalletInfo().signingKey();
+                }
+                if (parent != null) {
+                    return parent.getSigningKey();
+                }
+                return null;
             }
 
             @Override
@@ -1416,6 +1435,17 @@ public class ChangeWatcherFactory {
                 this.name = name;
                 this.parent = parent;
                 this.blockchainContext = blockchainContext;
+            }
+
+            @Override
+            public byte[] getSigningKey() {
+                if (blockchainContext != null && blockchainContext.getWalletInfo().signingKey() != null) {
+                    return blockchainContext.getWalletInfo().signingKey();
+                }
+                if (parent != null) {
+                    return parent.getSigningKey();
+                }
+                return null;
             }
 
             @Override
