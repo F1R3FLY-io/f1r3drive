@@ -328,7 +328,7 @@ public class InMemoryFileSystem implements FileSystem {
         List<DeployServiceCommon.DeployInfo> deploys = f1R3FlyBlockchainClient.getGenesisBlock().getDeploysList();
 
         DeployServiceCommon.DeployInfo tokenInitializeDeploy = deploys.stream()
-                .filter((deployInfo1 -> deployInfo1.getTerm().contains("revVaultInitCh"))).findFirst().orElseThrow();
+                .filter((deployInfo1 -> deployInfo1.getTerm().contains("systemVaultInitCh"))).findFirst().orElseThrow();
 
         String regex = "\\\"(1111[A-Za-z0-9]+)\\\"";
         java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(regex);

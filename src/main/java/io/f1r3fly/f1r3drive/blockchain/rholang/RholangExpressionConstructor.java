@@ -42,10 +42,10 @@ public class RholangExpressionConstructor {
 
     public static String checkBalanceRho(String addr) {
         return new StringBuilder()
-            .append("new return, rl(`rho:registry:lookup`), RevVaultCh, vaultCh in { ")
-            .append("  rl!(`rho:rchain:revVault`, *RevVaultCh) | ")
-            .append("  for (@(_, RevVault) <- RevVaultCh) { ")
-            .append("    @RevVault!(\"findOrCreate\", \"")
+            .append("new return, rl(`rho:registry:lookup`), SystemVaultCh, vaultCh in { ")
+            .append("  rl!(`rho:vault:system`, *SystemVaultCh) | ")
+            .append("  for (@(_, SystemVault) <- SystemVaultCh) { ")
+            .append("    @SystemVault!(\"findOrCreate\", \"")
             .append(addr) // insert balance address
             .append("\", *vaultCh) | ")
             .append("    for (@maybeVault <- vaultCh) { ")
@@ -304,28 +304,28 @@ public class RholangExpressionConstructor {
     }
     
     /**
-     * Constructs a Rholang expression for transferring REV tokens between addresses
+     * Constructs a Rholang expression for transferring tokens between vault addresses
      * 
-     * @param revAddrFrom source REV address
-     * @param revAddrTo destination REV address
+     * @param vaultAddrFrom source vault address
+     * @param vaultAddrTo destination vault address
      * @param amount amount to transfer
-     * @return Rholang expression for REV transfer
+     * @return Rholang expression for vault transfer
      * 
      * Output looks like:
-     * new rl(`rho:registry:lookup`), RevVaultCh in {
-     *   rl!(`rho:rchain:revVault`, *RevVaultCh) |
-     *   for (@(_, RevVault) <- RevVaultCh) {
-     *     new vaultCh, vaultTo, revVaultkeyCh, deployerId(`rho:rchain:deployerId`), deployId(`rho:rchain:deployId`) in {
-     *       match ("1111uwQS3sRCQm36VkJPFQVVNWYbXQmp2EfP3c3JvcQkKJK6QNqZh", "1111uwRc5pUBYUT4ERVsmpPj1TD1cpQvQpSCVJwAhzp1Cpt8hXuVR", 100) {
-     *         (revAddrFrom, revAddrTo, amount) => {
-     *           @RevVault!("findOrCreate", revAddrFrom, *vaultCh) |
-     *           @RevVault!("findOrCreate", revAddrTo, *vaultTo) |
-     *           @RevVault!("deployerAuthKey", *deployerId, *revVaultkeyCh) |
-     *           for (@vault <- vaultCh; key <- revVaultkeyCh; _ <- vaultTo) {
+     * new rl(`rho:registry:lookup`), SystemVaultCh in {
+     *   rl!(`rho:vault:system`, *SystemVaultCh) |
+     *   for (@(_, SystemVault) <- SystemVaultCh) {
+     *     new vaultCh, vaultTo, authKeyCh, deployerId(`rho:system:deployerId`), deployId(`rho:system:deployId`) in {
+     *       match ("1111...", "1111...", 100) {
+     *         (vaultAddrFrom, vaultAddrTo, amount) => {
+     *           @SystemVault!("findOrCreate", vaultAddrFrom, *vaultCh) |
+     *           @SystemVault!("findOrCreate", vaultAddrTo, *vaultTo) |
+     *           @SystemVault!("deployerAuthKey", *deployerId, *authKeyCh) |
+     *           for (@vault <- vaultCh; key <- authKeyCh; _ <- vaultTo) {
      *             match vault {
      *               (true, vault) => {
      *                 new resultCh in {
-     *                   @vault!("transfer", revAddrTo, amount, *key, *resultCh) |
+     *                   @vault!("transfer", vaultAddrTo, amount, *key, *resultCh) |
      *                   for (@result <- resultCh) {
      *                     match result {
      *                       (true , _  ) => deployId!((true, "Transfer successful (not yet finalized)."))
@@ -335,7 +335,7 @@ public class RholangExpressionConstructor {
      *                 }
      *               }
      *               err => {
-     *                 deployId!((false, "REV vault cannot be found or created."))
+     *                 deployId!((false, "System vault cannot be found or created."))
      *               }
      *             }
      *           }
@@ -345,31 +345,31 @@ public class RholangExpressionConstructor {
      *   }
      * }
      */
-    public static String transfer(String revAddrFrom, String revAddrTo, long amount) {
+    public static String transfer(String vaultAddrFrom, String vaultAddrTo, long amount) {
         return new StringBuilder()
-            .append("new rl(`rho:registry:lookup`), RevVaultCh in {")
-            .append("rl!(`rho:rchain:revVault`, *RevVaultCh) | ")
-            .append("for (@(_, RevVault) <- RevVaultCh) {")
-            .append("new vaultCh, vaultTo, revVaultkeyCh, ")
-            .append("deployerId(`rho:rchain:deployerId`), ")
-            .append("deployId(`rho:rchain:deployId`) ")
+            .append("new rl(`rho:registry:lookup`), SystemVaultCh in {")
+            .append("rl!(`rho:vault:system`, *SystemVaultCh) | ")
+            .append("for (@(_, SystemVault) <- SystemVaultCh) {")
+            .append("new vaultCh, vaultTo, authKeyCh, ")
+            .append("deployerId(`rho:system:deployerId`), ")
+            .append("deployId(`rho:system:deployId`) ")
             .append("in {")
             .append("match (\"")
-            .append(revAddrFrom)
+            .append(vaultAddrFrom)
             .append("\", \"")
-            .append(revAddrTo)
+            .append(vaultAddrTo)
             .append("\", ")
             .append(amount)
             .append(") {")
-            .append("(revAddrFrom, revAddrTo, amount) => {")
-            .append("@RevVault!(\"findOrCreate\", revAddrFrom, *vaultCh) | ")
-            .append("@RevVault!(\"findOrCreate\", revAddrTo, *vaultTo) | ")
-            .append("@RevVault!(\"deployerAuthKey\", *deployerId, *revVaultkeyCh) | ")
-            .append("for (@vault <- vaultCh; key <- revVaultkeyCh; _ <- vaultTo) {")
+            .append("(vaultAddrFrom, vaultAddrTo, amount) => {")
+            .append("@SystemVault!(\"findOrCreate\", vaultAddrFrom, *vaultCh) | ")
+            .append("@SystemVault!(\"findOrCreate\", vaultAddrTo, *vaultTo) | ")
+            .append("@SystemVault!(\"deployerAuthKey\", *deployerId, *authKeyCh) | ")
+            .append("for (@vault <- vaultCh; key <- authKeyCh; _ <- vaultTo) {")
             .append("match vault {")
             .append("(true, vault) => {")
             .append("new resultCh in {")
-            .append("@vault!(\"transfer\", revAddrTo, amount, *key, *resultCh) | ")
+            .append("@vault!(\"transfer\", vaultAddrTo, amount, *key, *resultCh) | ")
             .append("for (@result <- resultCh) {")
             .append("match result {")
             .append("(true, _) => deployId!((true, \"Transfer successful (not yet finalized).\"))")
@@ -379,7 +379,7 @@ public class RholangExpressionConstructor {
             .append("}")
             .append("}")
             .append("err => {")
-            .append("deployId!((false, \"REV vault cannot be found or created.\"))")
+            .append("deployId!((false, \"System vault cannot be found or created.\"))")
             .append("}")
             .append("}")
             .append("}")
