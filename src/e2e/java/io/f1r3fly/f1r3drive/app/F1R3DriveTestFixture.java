@@ -116,7 +116,7 @@ public class F1R3DriveTestFixture {
                 "--required-signatures", "0",
                 "--synchrony-constraint-threshold=0.0",
                 "--validator-private-key", validatorPrivateKey)
-            .withEnv("JAVA_TOOL_OPTIONS", "-Xmx1g")
+            .withEnv("JAVA_TOOL_OPTIONS", "-Xmx2g")
             .waitingFor(Wait.forListeningPorts(GRPC_PORT))
             .withNetwork(network)
             .withNetworkAliases(bootAlias)
@@ -147,7 +147,7 @@ public class F1R3DriveTestFixture {
                 "--host", observerAlias,
                 "--approve-duration", "10seconds", "--approve-interval", "10seconds",
                 "--fork-choice-check-if-stale-interval", "30seconds", "--fork-choice-stale-threshold", "30seconds")
-            .withEnv("JAVA_TOOL_OPTIONS", "-Xmx1g")
+            .withEnv("JAVA_TOOL_OPTIONS", "-Xmx2g")
             .waitingFor(Wait.forListeningPorts(GRPC_PORT))
             .withNetwork(network)
             .withNetworkAliases(observerAlias)
@@ -165,27 +165,51 @@ public class F1R3DriveTestFixture {
     }
 
     void mountF1r3Drive(boolean manualPropose) throws InterruptedException {
-        // Wait for the Observer node to finish processing the Genesis Block
-        Thread.sleep(30000);
-
         new File("/tmp/cipher.key").delete(); // remove key file if exists
 
         AESCipher.init("/tmp/cipher.key"); // file doesn't exist, so new key will be generated there
         f1R3FlyBlockchainClient = new F1r3flyBlockchainClient(
             "localhost", f1r3flyBoot.getMappedPort(GRPC_PORT),
             "localhost", f1r3flyObserver.getMappedPort(GRPC_PORT),
-            manualPropose); // Enable manual propose for tests to test the full flow
-                f1r3DriveFuse = new F1r3DriveFuse(f1R3FlyBlockchainClient);
+            manualPropose);
 
-                forceUmountAndCleanup(); // cleanup before mount
+        // Poll for the Observer node to finish processing the Genesis Block
+        waitForGenesisBlock(120_000);
+
+        f1r3DriveFuse = new F1r3DriveFuse(f1R3FlyBlockchainClient);
+
+        forceUmountAndCleanup(); // cleanup before mount
 
         // Add delay before mounting to ensure previous test cleanup is complete
-                Thread.sleep(1000);
+        Thread.sleep(1000);
 
-                f1r3DriveFuse.mount(MOUNT_POINT);
+        f1r3DriveFuse.mount(MOUNT_POINT);
 
-                // Add delay after mounting to ensure mount is stable
-                Thread.sleep(1000);
+        // Add delay after mounting to ensure mount is stable
+        Thread.sleep(1000);
+    }
+
+    private void waitForGenesisBlock(long timeoutMs) throws InterruptedException {
+        long startTime = System.currentTimeMillis();
+        long waitTime = 1000;
+        int attempts = 0;
+        log.info("Polling for genesis block availability (timeout: {}ms)...", timeoutMs);
+        while (true) {
+            attempts++;
+            try {
+                f1R3FlyBlockchainClient.getGenesisBlock();
+                log.info("Genesis block available after {} attempts", attempts);
+                return;
+            } catch (Exception e) {
+                if (System.currentTimeMillis() - startTime > timeoutMs) {
+                    throw new RuntimeException("Timeout after " + timeoutMs + "ms and " + attempts
+                        + " attempts waiting for genesis block: " + e.getMessage(), e);
+                }
+                log.info("Genesis block not yet available (attempt {}), retrying in {}ms: {}", attempts, waitTime, e.getMessage());
+                Thread.sleep(waitTime);
+                waitTime = Math.min(waitTime * 2, 5000);
+            }
+        }
     }
 
     void startAutoProposer() {
