@@ -12,13 +12,13 @@ import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+import org.testcontainers.utility.MountableFile;
 
 import java.io.File;
 import java.io.IOException;
@@ -26,6 +26,7 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.List;
 
 @Testcontainers
@@ -79,23 +80,42 @@ public class F1R3DriveTestFixture {
 
         String bootAlias = "f1r3fly-boot";
         String observerAlias = "f1r3fly-observer";
-        f1r3flyBoot = new GenericContainer<>(F1R3FLY_IMAGE)
-            // Bootstrap-specific configuration (ceremony master)
-            .withFileSystemBind("local-shard/conf/bootstrap-ceremony.conf", "/var/lib/rnode/rnode.conf", BindMode.READ_ONLY)
-            .withFileSystemBind("local-shard/genesis/wallets.txt", "/var/lib/rnode/genesis/wallets.txt", BindMode.READ_ONLY)
-            .withFileSystemBind("local-shard/genesis/singleton-bonds.txt", "/var/lib/rnode/genesis/bonds.txt", BindMode.READ_ONLY)
-            .withFileSystemBind("local-shard/conf/logback.xml", "/var/lib/rnode/logback.xml", BindMode.READ_ONLY)
-            // Node-specific volumes
-            .withFileSystemBind("local-shard/data/bootstrap", "/var/lib/rnode/", BindMode.READ_WRITE)
-            .withFileSystemBind("local-shard/certs/bootstrap/node.certificate.pem", "/var/lib/rnode/node.certificate.pem", BindMode.READ_ONLY)
-            .withFileSystemBind("local-shard/certs/bootstrap/node.key.pem", "/var/lib/rnode/node.key.pem", BindMode.READ_ONLY)
-            .withExposedPorts(GRPC_PORT, PROTOCOL_PORT, DISCOVERY_PORT)
-            .withCommand("run -s --no-upnp --allow-private-addresses"
+        // Boot node command args (passed to rnode via entrypoint)
+        String bootRunArgs = "run -s --no-upnp --allow-private-addresses"
                 + " --host " + bootAlias
                 + " --api-max-blocks-limit " + MAX_BLOCK_LIMIT
                 + " --api-grpc-max-recv-message-size " + MAX_MESSAGE_SIZE
                 + " --required-signatures 0"
-                + " --synchrony-constraint-threshold=0.0 --validator-private-key " + validatorPrivateKey)
+                + " --synchrony-constraint-threshold=0.0 --validator-private-key " + validatorPrivateKey;
+
+        f1r3flyBoot = new GenericContainer<>(F1R3FLY_IMAGE)
+            // Stage config files + init script (Docker volume at /var/lib/rnode hides files copied there)
+            .withCopyFileToContainer(MountableFile.forHostPath(new File("local-shard/scripts/boot-init.sh").getAbsolutePath(), 0777), "/opt/rnode-staging/init.sh")
+            .withCopyFileToContainer(MountableFile.forHostPath(new File("local-shard/conf/bootstrap-ceremony-test.conf").getAbsolutePath(), 0777), "/opt/rnode-staging/rnode.conf")
+            .withCopyFileToContainer(MountableFile.forHostPath(new File("local-shard/genesis/wallets.txt").getAbsolutePath(), 0777), "/opt/rnode-staging/genesis/wallets.txt")
+            .withCopyFileToContainer(MountableFile.forHostPath(new File("local-shard/genesis/singleton-bonds.txt").getAbsolutePath(), 0777), "/opt/rnode-staging/genesis/bonds.txt")
+            .withCopyFileToContainer(MountableFile.forHostPath(new File("local-shard/conf/logback.xml").getAbsolutePath(), 0777), "/opt/rnode-staging/logback.xml")
+            .withCopyFileToContainer(MountableFile.forHostPath(new File("local-shard/certs/bootstrap/node.certificate.pem").getAbsolutePath(), 0777), "/opt/rnode-staging/node.certificate.pem")
+            .withCopyFileToContainer(MountableFile.forHostPath(new File("local-shard/certs/bootstrap/node.key.pem").getAbsolutePath(), 0777), "/opt/rnode-staging/node.key.pem")
+            .withExposedPorts(GRPC_PORT, PROTOCOL_PORT, DISCOVERY_PORT)
+            .withCreateContainerCmdModifier(cmd -> {
+                // Init script copies config from staging into volume, then execs rnode with "$@"
+                cmd.withEntrypoint("/opt/rnode-staging/init.sh");
+                cmd.withUser("root");
+                // Docker-managed volume for /var/lib/rnode (writable, no VirtioFS bind mount)
+                cmd.getHostConfig().withMounts(java.util.Arrays.asList(
+                    new com.github.dockerjava.api.model.Mount()
+                        .withType(com.github.dockerjava.api.model.MountType.VOLUME)
+                        .withTarget("/var/lib/rnode")
+                ));
+            })
+            .withCommand("run", "-s", "--no-upnp", "--allow-private-addresses",
+                "--host", bootAlias,
+                "--api-max-blocks-limit", String.valueOf(MAX_BLOCK_LIMIT),
+                "--api-grpc-max-recv-message-size", String.valueOf(MAX_MESSAGE_SIZE),
+                "--required-signatures", "0",
+                "--synchrony-constraint-threshold=0.0",
+                "--validator-private-key", validatorPrivateKey)
             .withEnv("JAVA_TOOL_OPTIONS", "-Xmx1g")
             .waitingFor(Wait.forListeningPorts(GRPC_PORT))
             .withNetwork(network)
@@ -111,13 +131,22 @@ public class F1R3DriveTestFixture {
         log.info("Using bootstrap address: {}", f1r3flyBootAddress);
 
         f1r3flyObserver = new GenericContainer<>(F1R3FLY_IMAGE)
-            .withFileSystemBind("local-shard/conf/logback.xml", "/var/lib/rnode/logback.xml", BindMode.READ_ONLY)
-            .withFileSystemBind("local-shard/data/observer/", "/var/lib/rnode/", BindMode.READ_WRITE)
+            .withCopyFileToContainer(MountableFile.forHostPath(new File("local-shard/scripts/observer-init.sh").getAbsolutePath(), 0777), "/opt/rnode-staging/init.sh")
+            .withCopyFileToContainer(MountableFile.forHostPath(new File("local-shard/conf/logback.xml").getAbsolutePath(), 0777), "/opt/rnode-staging/logback.xml")
             .withExposedPorts(GRPC_PORT)
-            .withCommand("run -b " + f1r3flyBootAddress + " --allow-private-addresses --no-upnp" +
-                " --host " + observerAlias +
-                " --approve-duration 10seconds --approve-interval 10seconds" +
-                " --fork-choice-check-if-stale-interval 30seconds --fork-choice-stale-threshold 30seconds")
+            .withCreateContainerCmdModifier(cmd -> {
+                cmd.withEntrypoint("/opt/rnode-staging/init.sh");
+                cmd.withUser("root");
+                cmd.getHostConfig().withMounts(java.util.Arrays.asList(
+                    new com.github.dockerjava.api.model.Mount()
+                        .withType(com.github.dockerjava.api.model.MountType.VOLUME)
+                        .withTarget("/var/lib/rnode")
+                ));
+            })
+            .withCommand("run", "-b", f1r3flyBootAddress, "--allow-private-addresses", "--no-upnp",
+                "--host", observerAlias,
+                "--approve-duration", "10seconds", "--approve-interval", "10seconds",
+                "--fork-choice-check-if-stale-interval", "30seconds", "--fork-choice-stale-threshold", "30seconds")
             .withEnv("JAVA_TOOL_OPTIONS", "-Xmx1g")
             .waitingFor(Wait.forListeningPorts(GRPC_PORT))
             .withNetwork(network)
@@ -127,8 +156,8 @@ public class F1R3DriveTestFixture {
         log.info("Starting observer with bootstrap address: {}", f1r3flyBootAddress);
         f1r3flyObserver.start();
 
-        // commented b/c save the java heap memory
-        // f1r3flyBoot.followOutput(logConsumer);
+        f1r3flyBoot.followOutput(new Slf4jLogConsumer(LoggerFactory.getLogger("BOOT")));
+        f1r3flyObserver.followOutput(new Slf4jLogConsumer(LoggerFactory.getLogger("OBSERVER")));
 
         // Wait for both containers' GRPC ports to be available
         waitForPortToOpen("localhost", f1r3flyBoot.getMappedPort(GRPC_PORT), STARTUP_TIMEOUT);
@@ -136,6 +165,9 @@ public class F1R3DriveTestFixture {
     }
 
     void mountF1r3Drive(boolean manualPropose) throws InterruptedException {
+        // Wait for the Observer node to finish processing the Genesis Block
+        Thread.sleep(30000);
+
         new File("/tmp/cipher.key").delete(); // remove key file if exists
 
         AESCipher.init("/tmp/cipher.key"); // file doesn't exist, so new key will be generated there
@@ -143,17 +175,17 @@ public class F1R3DriveTestFixture {
             "localhost", f1r3flyBoot.getMappedPort(GRPC_PORT),
             "localhost", f1r3flyObserver.getMappedPort(GRPC_PORT),
             manualPropose); // Enable manual propose for tests to test the full flow
-        f1r3DriveFuse = new F1r3DriveFuse(f1R3FlyBlockchainClient);
+                f1r3DriveFuse = new F1r3DriveFuse(f1R3FlyBlockchainClient);
 
-        forceUmountAndCleanup(); // cleanup before mount
+                forceUmountAndCleanup(); // cleanup before mount
 
         // Add delay before mounting to ensure previous test cleanup is complete
-        Thread.sleep(1000);
+                Thread.sleep(1000);
 
-        f1r3DriveFuse.mount(MOUNT_POINT);
+                f1r3DriveFuse.mount(MOUNT_POINT);
 
-        // Add delay after mounting to ensure mount is stable
-        Thread.sleep(1000);
+                // Add delay after mounting to ensure mount is stable
+                Thread.sleep(1000);
     }
 
     void startAutoProposer() {

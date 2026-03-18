@@ -36,7 +36,7 @@ public class F1r3DriveAssertions extends F1R3DriveTestFixture {
                 .collect(Collectors.toSet());
         }
 
-        assertEquals(expectedChilds.length, children.size(), "Should be only %d file(s) in %s".formatted(expectedChilds.length, dir.getAbsolutePath()));
+        assertEquals(expectedChilds.length, children.size(), "Should be only %d file(s) in %s. Found: %s".formatted(expectedChilds.length, dir.getAbsolutePath(), children));
 
         for (File expectedChild : expectedChilds) {
             String expectedChildName = expectedChild.getName();
