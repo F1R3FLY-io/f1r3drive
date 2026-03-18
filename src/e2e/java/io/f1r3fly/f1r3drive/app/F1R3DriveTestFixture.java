@@ -52,7 +52,7 @@ public class F1R3DriveTestFixture {
     protected static final File UNLOCKED_WALLET_DIR_2 = new File(MOUNT_POINT_FILE, REV_WALLET_2);
 
     public static final DockerImageName F1R3FLY_IMAGE = DockerImageName.parse(
-        "f1r3flyindustries/f1r3fly-scala-node:latest");
+        "f1r3flyindustries/f1r3fly-rust-node:latest");
 
     protected static GenericContainer<?> f1r3flyBoot;
     protected static String f1r3flyBootAddress;
@@ -83,8 +83,8 @@ public class F1R3DriveTestFixture {
         // Boot node command args (passed to rnode via entrypoint)
         String bootRunArgs = "run -s --no-upnp --allow-private-addresses"
                 + " --host " + bootAlias
-                + " --api-max-blocks-limit " + MAX_BLOCK_LIMIT
-                + " --api-grpc-max-recv-message-size " + MAX_MESSAGE_SIZE
+                //+ " --api-max-blocks-limit " + MAX_BLOCK_LIMIT
+                //+ " --api-grpc-max-recv-message-size " + MAX_MESSAGE_SIZE
                 + " --required-signatures 0"
                 + " --synchrony-constraint-threshold=0.0 --validator-private-key " + validatorPrivateKey;
 
@@ -111,12 +111,12 @@ public class F1R3DriveTestFixture {
             })
             .withCommand("run", "-s", "--no-upnp", "--allow-private-addresses",
                 "--host", bootAlias,
-                "--api-max-blocks-limit", String.valueOf(MAX_BLOCK_LIMIT),
-                "--api-grpc-max-recv-message-size", String.valueOf(MAX_MESSAGE_SIZE),
+                //"--api-max-blocks-limit", String.valueOf(MAX_BLOCK_LIMIT),
+                //"--api-grpc-max-recv-message-size", String.valueOf(MAX_MESSAGE_SIZE),
                 "--required-signatures", "0",
                 "--synchrony-constraint-threshold=0.0",
                 "--validator-private-key", validatorPrivateKey)
-            .withEnv("JAVA_TOOL_OPTIONS", "-Xmx2g")
+
             .waitingFor(Wait.forListeningPorts(GRPC_PORT))
             .withNetwork(network)
             .withNetworkAliases(bootAlias)
@@ -147,7 +147,7 @@ public class F1R3DriveTestFixture {
                 "--host", observerAlias,
                 "--approve-duration", "10seconds", "--approve-interval", "10seconds",
                 "--fork-choice-check-if-stale-interval", "30seconds", "--fork-choice-stale-threshold", "30seconds")
-            .withEnv("JAVA_TOOL_OPTIONS", "-Xmx2g")
+
             .waitingFor(Wait.forListeningPorts(GRPC_PORT))
             .withNetwork(network)
             .withNetworkAliases(observerAlias)
