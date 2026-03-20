@@ -72,6 +72,8 @@ public class InMemoryFileSystem implements FileSystem {
     @NotNull
     private final DeployDispatcher deployDispatcher;
 
+    private final java.util.concurrent.ExecutorService executorService = java.util.concurrent.Executors.newFixedThreadPool(8);
+
     @NotNull
     private final F1r3flyBlockchainClient blockchainClient;
 
@@ -111,6 +113,9 @@ public class InMemoryFileSystem implements FileSystem {
      */
     @Nullable
     private FileProviderIntegration fileProviderIntegration;
+
+    @Nullable
+    private java.nio.file.Path mountPoint;
 
     /**
      * Creates a new InMemoryFileSystem with real blockchain integration.
@@ -187,26 +192,28 @@ public class InMemoryFileSystem implements FileSystem {
 
         FileChangeCallback fileCallback = new FileChangeCallback() {
             @Override
-            public byte[] loadFileContent(String path) {
-                logger.debug("Loading file content from blockchain: {}", path);
-                try {
-                    File file = getFileByPath(path);
-                    if (file instanceof BlockchainFile) {
-                        BlockchainFile blockchainFile = (BlockchainFile) file;
-                        ensureFileContentLoadedWithCache(blockchainFile);
-                        // Read content and return as byte array
-                        long size = blockchainFile.getSize();
-                        if (size > 0) {
-                            byte[] content = new byte[(int) size];
-                            FSPointer buffer = createFSPointer(content);
-                            blockchainFile.read(buffer, size, 0);
-                            return content;
+            public java.util.concurrent.CompletableFuture<byte[]> loadFileContent(String path) {
+                logger.debug("Loading file content from blockchain asynchronously: {}", path);
+                return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                    try {
+                        File file = getFileByPath(path);
+                        if (file instanceof BlockchainFile) {
+                            BlockchainFile blockchainFile = (BlockchainFile) file;
+                            ensureFileContentLoadedWithCache(blockchainFile);
+                            // Read content and return as byte array
+                            long size = blockchainFile.getSize();
+                            if (size > 0) {
+                                byte[] content = new byte[(int) size];
+                                io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer buffer = createFSPointer(content);
+                                blockchainFile.read(buffer, size, 0);
+                                return content;
+                            }
                         }
+                    } catch (Exception e) {
+                        logger.error("Failed to load file content: {}", path, e);
                     }
-                } catch (Exception e) {
-                    logger.error("Failed to load file content: {}", path, e);
-                }
-                return null;
+                    return new byte[0];
+                }, executorService);
             }
 
             @Override
@@ -293,14 +300,14 @@ public class InMemoryFileSystem implements FileSystem {
     public void setFileProviderIntegration(
             FileProviderIntegration fileProvider) {
         this.fileProviderIntegration = fileProvider;
-
         if (fileProvider != null) {
-            logger.info("Configuring FileProvider integration");
+            this.mountPoint = java.nio.file.Paths.get(fileProvider.getRootPath());
+            logger.info("Configuring FileProvider integration with mount point: {}", mountPoint);
 
             // Set up callback for FileProvider to load content from blockchain
             fileProvider.setFileChangeCallback(new FileChangeCallback() {
                 @Override
-                public byte[] loadFileContent(String path) {
+                public java.util.concurrent.CompletableFuture<byte[]> loadFileContent(String path) {
                     logger.debug("FileProvider requesting content for: {}", path);
                     return loadFileContentFromBlockchain(path);
                 }
@@ -387,25 +394,27 @@ public class InMemoryFileSystem implements FileSystem {
      * @param path the file path
      * @return file content as byte array, or null if not found
      */
-    private byte[] loadFileContentFromBlockchain(String path) {
-        try {
-            File file = getFileByPath(path);
-            if (file instanceof BlockchainFile) {
-                BlockchainFile blockchainFile = (BlockchainFile) file;
-                ensureFileContentLoadedWithCache(blockchainFile);
+    private java.util.concurrent.CompletableFuture<byte[]> loadFileContentFromBlockchain(String path) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                File file = getFileByPath(path);
+                if (file instanceof BlockchainFile) {
+                    BlockchainFile blockchainFile = (BlockchainFile) file;
+                    ensureFileContentLoadedWithCache(blockchainFile);
 
-                long size = blockchainFile.getSize();
-                if (size > 0) {
-                    byte[] content = new byte[(int) size];
-                    FSPointer buffer = createFSPointer(content);
-                    blockchainFile.read(buffer, size, 0);
-                    return content;
+                    long size = blockchainFile.getSize();
+                    if (size > 0) {
+                        byte[] content = new byte[(int) size];
+                        io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer buffer = createFSPointer(content);
+                        blockchainFile.read(buffer, size, 0);
+                        return content;
+                    }
                 }
+            } catch (Exception e) {
+                logger.error("Failed to load file content from blockchain: {}", path, e);
             }
-        } catch (Exception e) {
-            logger.error("Failed to load file content from blockchain: {}", path, e);
-        }
-        return null;
+            return new byte[0];
+        }, executorService);
     }
 
     /**
@@ -460,6 +469,17 @@ public class InMemoryFileSystem implements FileSystem {
                         false);
             }
         }
+    }
+
+    public String getRelativePath(String absolutePath) {
+        if (mountPoint == null || !absolutePath.startsWith(mountPoint.toString())) {
+            return null;
+        }
+        String relative = absolutePath.substring(mountPoint.toString().length());
+        if (relative.startsWith("/") || relative.startsWith("\\")) {
+            relative = relative.substring(1);
+        }
+        return relative;
     }
 
     /**
@@ -600,12 +620,14 @@ public class InMemoryFileSystem implements FileSystem {
             // Sync with FileProvider if available
             if (fileProviderIntegration != null &&
                     fileProviderIntegration.isInitialized()) {
-                fileProviderIntegration.createPlaceholder(
+                // For locally created files, register as materialized WITHOUT creating a placeholder
+                // creating a placeholder would overwrite the user's data
+                fileProviderIntegration.registerMaterializedFile(
                         path,
-                        0,
+                        0, // Initial size
                         System.currentTimeMillis(),
                         false);
-                logger.debug("Created FileProvider placeholder for: {}", path);
+                logger.debug("Registered local file as materialized with FileProvider: {}", path);
             }
 
             logger.debug(
@@ -648,15 +670,15 @@ public class InMemoryFileSystem implements FileSystem {
                     parent);
             parent.addChild(newFile);
 
-            // Register as materialized with FileProvider if available
+            // Create placeholder with FileProvider if available
             if (fileProviderIntegration != null &&
                     fileProviderIntegration.isInitialized()) {
-                fileProviderIntegration.registerMaterializedFile(
+                fileProviderIntegration.createPlaceholder(
                         path,
                         size,
                         System.currentTimeMillis(),
                         false);
-                logger.debug("Registered imported file as materialized: {}", path);
+                logger.debug("Created placeholder for imported file: {}", path);
             }
 
             logger.debug(

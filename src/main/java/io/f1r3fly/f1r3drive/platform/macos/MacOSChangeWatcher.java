@@ -33,6 +33,7 @@ public class MacOSChangeWatcher implements ChangeWatcher {
     private ChangeListener changeListener;
     private FileChangeCallback fileChangeCallback;
     private InMemoryFileSystem inMemoryFileSystem;
+    private io.f1r3fly.f1r3drive.placeholder.PlaceholderManager placeholderManager;
 
     // Configuration
     private String watchedPath;
@@ -398,7 +399,7 @@ public class MacOSChangeWatcher implements ChangeWatcher {
                 try {
                     // Check if this might be a placeholder that needs loading
                     if (shouldTriggerLazyLoad(path)) {
-                        byte[] content = fileChangeCallback.loadFileContent(path);
+                        byte[] content = fileChangeCallback.loadFileContent(path).join();
                         if (content != null) {
                             LOGGER.debug("Lazy loaded content for file: {}", path);
                         }
@@ -468,9 +469,15 @@ public class MacOSChangeWatcher implements ChangeWatcher {
          * @return true if lazy loading should be triggered
          */
         private boolean shouldTriggerLazyLoad(String path) {
-            // TODO: Implement placeholder detection logic
-            // This would check if the file is a placeholder that needs content loading
-            return false;
+            if (MacOSChangeWatcher.this.placeholderManager == null) return false;
+            if (MacOSChangeWatcher.this.inMemoryFileSystem == null) return false;
+            
+            // Convert absolute path from FSEvents to relative path for PlaceholderManager
+            String relativePath = MacOSChangeWatcher.this.inMemoryFileSystem.getRelativePath(path);
+            if (relativePath == null) return false;
+
+            return MacOSChangeWatcher.this.placeholderManager.isPlaceholder(relativePath) && 
+                   !MacOSChangeWatcher.this.placeholderManager.isMaterialized(relativePath);
         }
     }
 }

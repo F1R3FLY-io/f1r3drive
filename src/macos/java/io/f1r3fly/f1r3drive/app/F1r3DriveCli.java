@@ -236,28 +236,30 @@ class F1r3DriveCli implements Callable<Integer> {
         // Create FileChangeCallback for blockchain integration
         io.f1r3fly.f1r3drive.platform.FileChangeCallback fileChangeCallback = new io.f1r3fly.f1r3drive.platform.FileChangeCallback() {
             @Override
-            public byte[] loadFileContent(String path) {
-                if (blockchainContext != null) {
-                    try {
-                        // Real implementation - load from blockchain
+            public java.util.concurrent.CompletableFuture<byte[]> loadFileContent(String path) {
+                return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                    if (blockchainContext != null) {
+                        try {
+                            // Real implementation - load from blockchain
+                            LOGGER.debug(
+                                    "Loading content from blockchain for: {}",
+                                    path);
+                            // TODO: Implement actual blockchain file loading
+                            return ("Blockchain content for " + path).getBytes();
+                        } catch (Exception e) {
+                            LOGGER.error(
+                                    "Failed to load content from blockchain for path: {}",
+                                    path,
+                                    e);
+                            return new byte[0];
+                        }
+                    } else {
                         LOGGER.debug(
-                                "Loading content from blockchain for: {}",
+                                "No blockchain context - returning empty content for: {}",
                                 path);
-                        // TODO: Implement actual blockchain file loading
-                        return ("Blockchain content for " + path).getBytes();
-                    } catch (Exception e) {
-                        LOGGER.error(
-                                "Failed to load content from blockchain for path: {}",
-                                path,
-                                e);
                         return new byte[0];
                     }
-                } else {
-                    LOGGER.debug(
-                            "No blockchain context - returning empty content for: {}",
-                            path);
-                    return new byte[0];
-                }
+                });
             }
 
             @Override

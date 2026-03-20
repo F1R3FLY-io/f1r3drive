@@ -1,6 +1,8 @@
 package io.f1r3fly.f1r3drive.platform.macos;
 
 import io.f1r3fly.f1r3drive.filesystem.InMemoryFileSystem;
+import io.f1r3fly.f1r3drive.placeholder.PlaceholderInfo;
+import io.f1r3fly.f1r3drive.placeholder.PlaceholderState;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.io.IOException;
@@ -75,34 +77,12 @@ public class FileProviderIntegration {
     private String domainIdentifier;
     private String displayName = "F1r3Drive";
     private String rootPath;
-    private int defaultMaterializationPolicy = NSFileProviderMaterializationPolicyOnDemand;
 
-    /**
-     * Information about a placeholder file.
-     */
-    private static class PlaceholderInfo {
-
-        final String path;
-        final long size;
-        final long lastModified;
-        final boolean isDirectory;
-        final int materializationPolicy;
-        volatile boolean isMaterialized;
-
-        PlaceholderInfo(
-                String path,
-                long size,
-                long lastModified,
-                boolean isDirectory,
-                int materializationPolicy) {
-            this.path = path;
-            this.size = size;
-            this.lastModified = lastModified;
-            this.isDirectory = isDirectory;
-            this.materializationPolicy = materializationPolicy;
-            this.isMaterialized = false;
-        }
+    public String getRootPath() {
+        return rootPath;
     }
+
+    private int defaultMaterializationPolicy = NSFileProviderMaterializationPolicyOnDemand;
 
     /**
      * Creates a new FileProviderIntegration instance.
@@ -284,7 +264,8 @@ public class FileProviderIntegration {
                             size,
                             lastModified,
                             isDirectory,
-                            defaultMaterializationPolicy);
+                            defaultMaterializationPolicy,
+                            1);
                     placeholders.put(relativePath, info);
 
                     LOGGER.debug(
@@ -309,7 +290,8 @@ public class FileProviderIntegration {
                         size,
                         lastModified,
                         isDirectory,
-                        defaultMaterializationPolicy);
+                        defaultMaterializationPolicy,
+                        1);
                 placeholders.put(relativePath, info);
 
                 LOGGER.debug(
@@ -402,7 +384,7 @@ public class FileProviderIntegration {
                 return false;
             }
 
-            if (placeholder.isMaterialized) {
+            if (placeholder.isLoaded()) {
                 LOGGER.debug(
                         "Placeholder already materialized: {}",
                         relativePath);
@@ -416,42 +398,40 @@ public class FileProviderIntegration {
                 return false;
             }
 
-            LOGGER.info("Materializing placeholder: {}", relativePath);
+            LOGGER.info("Materializing placeholder asynchronously: {}", relativePath);
             materializingFiles.add(relativePath);
 
-            try {
-                // Load content from blockchain via callback
-                byte[] content = null;
-                if (fileChangeCallback != null) {
-                    content = fileChangeCallback.loadFileContent(relativePath);
-                }
+            if (fileChangeCallback != null) {
+                fileChangeCallback.loadFileContent(relativePath).thenAcceptAsync(content -> {
+                    try {
+                        if (content == null && !placeholder.isDirectory()) {
+                            LOGGER.error("Failed to load content for file: {}", relativePath);
+                            materializingFiles.remove(relativePath);
+                            return;
+                        }
 
-                if (content == null && !placeholder.isDirectory) {
-                    LOGGER.error(
-                            "Failed to load content for file: {}",
-                            relativePath);
-                    return false;
-                }
-
-                // Provide content to native File Provider
-                if (nativeMaterializePlaceholder(
-                        nativeProviderRef,
-                        resolvePath(relativePath),
-                        content)) {
-                    placeholder.isMaterialized = true;
-                    LOGGER.info(
-                            "Successfully materialized placeholder: {}",
-                            relativePath);
-                    return true;
-                } else {
-                    LOGGER.error(
-                            "Failed to materialize placeholder in native layer: {}",
-                            relativePath);
-                    return false;
-                }
-            } finally {
-                materializingFiles.remove(relativePath);
+                        // PUSH content to native File Provider directly from background thread
+                        if (nativeMaterializePlaceholder(
+                                nativeProviderRef,
+                                resolvePath(relativePath),
+                                content)) {
+                            placeholder.setState(PlaceholderState.LOADED);
+                            LOGGER.info("Successfully pushed blockchain content to disk for: {}", relativePath);
+                        } else {
+                            LOGGER.error("Failed to push content to native layer for: {}", relativePath);
+                        }
+                    } catch (Exception e) {
+                        LOGGER.error("Async materialization error for {}", relativePath, e);
+                    } finally {
+                        materializingFiles.remove(relativePath);
+                    }
+                }, materializationExecutor);
+                
+                return true; // Request accepted and processing in background
             }
+            
+            materializingFiles.remove(relativePath);
+            return false;
         } catch (Exception e) {
             LOGGER.error(
                     "Error materializing placeholder: {}",
@@ -496,8 +476,8 @@ public class FileProviderIntegration {
                         relativePath,
                         size,
                         lastModified,
-                        placeholder.isDirectory,
-                        placeholder.materializationPolicy);
+                        placeholder.isDirectory(),
+                        placeholder.getMaterializationPolicy());
                 updated.isMaterialized = placeholder.isMaterialized;
                 placeholders.put(relativePath, updated);
 

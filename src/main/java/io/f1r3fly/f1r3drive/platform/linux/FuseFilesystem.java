@@ -394,7 +394,7 @@ public class FuseFilesystem extends FuseStubFS {
 
         try {
             LOGGER.debug("Loading placeholder file from blockchain: {}", path);
-            byte[] content = fileChangeCallback.loadFileContent(path);
+            byte[] content = fileChangeCallback.loadFileContent(path).join();
 
             if (content != null) {
                 VirtualFile virtualFile = new VirtualFile(path, content);

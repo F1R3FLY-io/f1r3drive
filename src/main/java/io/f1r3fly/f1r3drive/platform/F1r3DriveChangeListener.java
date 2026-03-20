@@ -140,7 +140,7 @@ public class F1r3DriveChangeListener implements ChangeListener {
                     // mode 0755
                     fileSystem.makeDirectory(relativePath, 0755L);
                 } else {
-                    // READ CONTENT FIRST to avoid reading the placeholder overwritten by createFile
+                    // READ CONTENT FIRST
                     byte[] content = null;
                     try {
                         if (Files.size(p) > 0) {
@@ -149,6 +149,15 @@ public class F1r3DriveChangeListener implements ChangeListener {
                     } catch (java.nio.file.NoSuchFileException e) {
                         LOGGER.warn("CHANGE_LISTENER_CREATE_CANCELLED: File disappeared during read: {}", path);
                         return;
+                    }
+
+                    // SURGICAL GUARD: Ignore if content matches our placeholder signature
+                    if (content != null && content.length >= 60 && content.length <= 70) {
+                        String contentStr = new String(content);
+                        if (contentStr.contains("F1r3Drive placeholder file")) {
+                            LOGGER.debug("CHANGE_LISTENER_IGNORE: Internal placeholder detected for {}, blocking sync loop", relativePath);
+                            return;
+                        }
                     }
 
                     // Create file in FileSystem
@@ -207,6 +216,16 @@ public class F1r3DriveChangeListener implements ChangeListener {
                 if (Files.exists(p) && !Files.isDirectory(p)) {
                     try {
                         byte[] content = Files.readAllBytes(p);
+                        
+                        // SURGICAL GUARD: Ignore if content matches our placeholder signature
+                        if (content.length >= 60 && content.length <= 70) {
+                            String contentStr = new String(content);
+                            if (contentStr.contains("F1r3Drive placeholder file")) {
+                                LOGGER.debug("CHANGE_LISTENER_IGNORE: Placeholder access detected for {}, blocking sync loop", relativePath);
+                                return;
+                            }
+                        }
+
                         io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer ptr = wrapBytes(content);
                         fileSystem.writeFile(relativePath, ptr, content.length, 0);
                         fileSystem.flushFile(relativePath);

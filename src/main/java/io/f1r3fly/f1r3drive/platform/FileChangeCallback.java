@@ -11,9 +11,9 @@ public interface FileChangeCallback {
      * This is typically triggered when a placeholder file is accessed.
      *
      * @param path the path of the file to load
-     * @return the file content as byte array, or null if file cannot be loaded
+     * @return a CompletableFuture that will complete with the file content
      */
-    byte[] loadFileContent(String path);
+    java.util.concurrent.CompletableFuture<byte[]> loadFileContent(String path);
 
     /**
      * Called to check if a file exists in the blockchain.

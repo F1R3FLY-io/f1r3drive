@@ -177,9 +177,8 @@ Java_io_f1r3fly_f1r3drive_platform_macos_FileProviderIntegration_nativeCreatePla
     NSString *nsRelativePath = JStringToNSString(env, path);
     NSString *nsPath = [context->rootPath stringByAppendingPathComponent:nsRelativePath];
     
-    // Create placeholder file with minimal content
-    NSData *placeholderData = [@"F1r3Drive placeholder file - content will be loaded on access" 
-                              dataUsingEncoding:NSUTF8StringEncoding];
+    // Create placeholder file with zero bytes (empty)
+    NSData *placeholderData = [NSData data];
     
     // Create file attributes
     NSMutableDictionary *attributes = [NSMutableDictionary dictionary];

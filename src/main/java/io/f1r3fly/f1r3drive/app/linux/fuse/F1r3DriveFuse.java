@@ -124,61 +124,63 @@ public class F1r3DriveFuse extends FuseStubFS {
 
         FileChangeCallback fileCallback = new FileChangeCallback() {
             @Override
-            public byte[] loadFileContent(String path) {
-                try {
-                    LOGGER.debug("Loading file content from filesystem for: {}", path);
+            public java.util.concurrent.CompletableFuture<byte[]> loadFileContent(String path) {
+                return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                    try {
+                        LOGGER.debug("Loading file content from filesystem for: {}", path);
 
-                    // Use InMemoryFileSystem directly
-                    if (fileSystem instanceof InMemoryFileSystem) {
-                        InMemoryFileSystem imfs = (InMemoryFileSystem) fileSystem;
+                        // Use InMemoryFileSystem directly
+                        if (fileSystem instanceof InMemoryFileSystem) {
+                            InMemoryFileSystem imfs = (InMemoryFileSystem) fileSystem;
 
-                        // Ensure path starts with slash for internal FS lookup
-                        String lookupPath = path.startsWith("/") ? path : "/" + path;
+                            // Ensure path starts with slash for internal FS lookup
+                            String lookupPath = path.startsWith("/") ? path : "/" + path;
 
-                        io.f1r3fly.f1r3drive.filesystem.common.File file = imfs.getFile(lookupPath);
-                        if (file != null) {
-                            long size = file.getSize();
-                            if (size <= 0) {
-                                return new byte[0];
-                            }
-
-                            byte[] data = new byte[(int) size];
-                            io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer ptr = new io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer() {
-                                @Override
-                                public void put(long offset, byte[] bytes, int start, int length) {
-                                    System.arraycopy(bytes, start, data, (int) offset, length);
+                            io.f1r3fly.f1r3drive.filesystem.common.File file = imfs.getFile(lookupPath);
+                            if (file != null) {
+                                long size = file.getSize();
+                                if (size <= 0) {
+                                    return new byte[0];
                                 }
 
-                                @Override
-                                public void get(long offset, byte[] bytes, int start, int length) {
-                                    throw new UnsupportedOperationException("Read only pointer");
-                                }
+                                byte[] data = new byte[(int) size];
+                                io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer ptr = new io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer() {
+                                    @Override
+                                    public void put(long offset, byte[] bytes, int start, int length) {
+                                        System.arraycopy(bytes, start, data, (int) offset, length);
+                                    }
 
-                                @Override
-                                public byte getByte(long offset) {
-                                    return 0;
-                                }
+                                    @Override
+                                    public void get(long offset, byte[] bytes, int start, int length) {
+                                        throw new UnsupportedOperationException("Read only pointer");
+                                    }
 
-                                @Override
-                                public void putByte(long offset, byte value) {
-                                    data[(int) offset] = value;
-                                }
-                            };
+                                    @Override
+                                    public byte getByte(long offset) {
+                                        return 0;
+                                    }
 
-                            // Use the readFile method which ensures content loading from blockchain
-                            int res = imfs.readFile(lookupPath, ptr, size, 0);
-                            if (res == 0) {
-                                return data;
+                                    @Override
+                                    public void putByte(long offset, byte value) {
+                                        data[(int) offset] = value;
+                                    }
+                                };
+
+                                // Use the readFile method which ensures content loading from blockchain
+                                int res = imfs.readFile(lookupPath, ptr, size, 0);
+                                if (res == 0) {
+                                    return data;
+                                }
                             }
                         }
-                    }
 
-                    LOGGER.warn("File not found or empty in FS: {}", path);
-                    return new byte[0];
-                } catch (Exception e) {
-                    LOGGER.error("Failed to load file content for: {}", path, e);
-                    throw new RuntimeException("Failed to load file content", e);
-                }
+                        LOGGER.warn("File not found or empty in FS: {}", path);
+                        return new byte[0];
+                    } catch (Exception e) {
+                        LOGGER.error("Failed to load file content for: {}", path, e);
+                        throw new RuntimeException("Failed to load file content", e);
+                    }
+                });
             }
 
             /**
@@ -308,8 +310,10 @@ public class F1r3DriveFuse extends FuseStubFS {
         // Setup file change callback for the watcher
         FileChangeCallback callback = new FileChangeCallback() {
             @Override
-            public byte[] loadFileContent(String path) {
-                return placeholderManager.loadContent(path);
+            public java.util.concurrent.CompletableFuture<byte[]> loadFileContent(String path) {
+                return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                    return placeholderManager.loadContent(path);
+                });
             }
 
             @Override

@@ -391,6 +391,11 @@ public class PlaceholderManager {
         return placeholders.containsKey(path);
     }
 
+    public boolean isMaterialized(String path) {
+        PlaceholderInfo info = placeholders.get(path);
+        return info != null && info.getState() == PlaceholderState.LOADED;
+    }
+
     /**
      * Invalidates cached content for a path.
      *
@@ -501,7 +506,7 @@ public class PlaceholderManager {
             updatePlaceholderState(path, PlaceholderState.LOADING);
 
             LOGGER.debug("Loading content from blockchain: {}", path);
-            byte[] content = fileChangeCallback.loadFileContent(path);
+            byte[] content = fileChangeCallback.loadFileContent(path).join();
 
             if (content != null) {
                 totalLoads.incrementAndGet();
