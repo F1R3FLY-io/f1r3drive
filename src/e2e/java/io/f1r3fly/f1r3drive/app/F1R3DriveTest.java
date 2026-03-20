@@ -25,6 +25,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class F1R3DriveTest extends F1R3DriveTestFixture {
 
+    private static final long SHARD_POLL_TIMEOUT_MS = 120_000;
+
     // TESTS:
 
     @Test
@@ -286,19 +288,15 @@ class F1R3DriveTest extends F1R3DriveTestFixture {
 
         assertContainTokenDirectoryLocally(UNLOCKED_WALLET_DIR_1);
 
-        // === PHASE 1: CREATE OPERATIONS AND CHECK LOCALLY ===
+        // === PHASE 1: CREATE OPERATIONS AND VERIFY AT SHARD ===
 
         File dir1 = new File(UNLOCKED_WALLET_DIR_1, "testDir");
-
         assertCreateNewDirectoryLocally(dir1);
-
-        assertContainChildsLocally(UNLOCKED_WALLET_DIR_1, dir1);
+        pollAssertContainChildsAtShard(SHARD_POLL_TIMEOUT_MS, UNLOCKED_WALLET_DIR_1, dir1);
 
         File renamedDir = new File(UNLOCKED_WALLET_DIR_1, "renamedDir");
-
         assertRenameFileLocally(dir1, renamedDir);
-
-        assertContainChildsLocally(UNLOCKED_WALLET_DIR_1, renamedDir);
+        pollAssertContainChildsAtShard(SHARD_POLL_TIMEOUT_MS, UNLOCKED_WALLET_DIR_1, renamedDir);
 
         File nestedDir1 = new File(renamedDir, "nestedDir1");
         File nestedDir2 = new File(nestedDir1, "nestedDir2");
@@ -308,36 +306,24 @@ class F1R3DriveTest extends F1R3DriveTestFixture {
         assertTrue(nestedDir1.exists(), "nestedDir1 should exist after mkdirs");
         assertTrue(nestedDir2.exists(), "nestedDir2 should exist after mkdirs");
 
-        assertContainChildsLocally(renamedDir, nestedDir1);
-
-        // === PHASE 2: WAIT FOR AUTO PROPOSER ===
-        log.info("Waiting 15 seconds for auto proposer to process creation operations...");
-        Thread.sleep(15000);
-
-        // === PHASE 3: CHECK CREATED STATE AT SHARD ===
-        assertContainChildsAtShard(UNLOCKED_WALLET_DIR_1, renamedDir);
-        assertContainChildsAtShard(renamedDir, nestedDir1);
+        // === PHASE 2 & 3: WAIT FOR AUTO PROPOSER AND CHECK CREATED STATE AT SHARD ===
+        log.info("Polling for auto proposer to process creation operations...");
+        pollAssertContainChildsAtShard(SHARD_POLL_TIMEOUT_MS, UNLOCKED_WALLET_DIR_1, renamedDir);
+        pollAssertContainChildsAtShard(SHARD_POLL_TIMEOUT_MS, renamedDir, nestedDir1);
 
         // === PHASE 4: DELETION OPERATIONS ===
 
         assertDeleteFileLocally(nestedDir2);
-
-        assertContainChildsLocally(nestedDir1);
+        pollAssertContainChildsAtShard(SHARD_POLL_TIMEOUT_MS, nestedDir1);
 
         assertDeleteFileLocally(nestedDir1);
-
-        assertContainChildsLocally(renamedDir);
+        pollAssertContainChildsAtShard(SHARD_POLL_TIMEOUT_MS, renamedDir);
 
         assertDeleteFileLocally(renamedDir);
 
-        assertContainChildsLocally(UNLOCKED_WALLET_DIR_1);
-
-        // === PHASE 5: WAIT FOR AUTO PROPOSER AGAIN ===
-        log.info("Waiting 15 seconds for auto proposer to process deletion operations...");
-        Thread.sleep(15000);
-
-        // === PHASE 6: CHECK FINAL STATE AT SHARD ===
-        assertContainChildsAtShard(UNLOCKED_WALLET_DIR_1); // should be empty after all deletions
+        // === PHASE 5 & 6: WAIT FOR AUTO PROPOSER AGAIN AND CHECK FINAL STATE AT SHARD ===
+        log.info("Polling for auto proposer to process deletion operations...");
+        pollAssertContainChildsAtShard(SHARD_POLL_TIMEOUT_MS, UNLOCKED_WALLET_DIR_1); // should be empty after all deletions
     }
 
     @Test
