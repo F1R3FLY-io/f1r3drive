@@ -35,7 +35,6 @@ public class F1R3DriveTestFixture {
     protected static final int PROTOCOL_PORT = 40400;
     protected static final int DISCOVERY_PORT = 40404;
     protected static final String MAX_BLOCK_LIMIT = "1000";
-    protected static final int MAX_MESSAGE_SIZE = 1024 * 1024 * 1024; // ~1G
     protected static final Duration STARTUP_TIMEOUT = Duration.ofMinutes(2);
     protected static final String validatorPrivateKey = "5f668a7ee96d944a4494cc947e4005e172d7ab3461ee5538f1f2a45a835e9657"; // Bootstrap
     protected static final Path MOUNT_POINT = new File("/tmp/f1r3drive/").toPath();
@@ -46,13 +45,13 @@ public class F1R3DriveTestFixture {
     protected static final File LOCKED_WALLET_DIR_1 = new File(MOUNT_POINT_FILE, "LOCKED-REMOTE-REV-" + REV_WALLET_1);
     protected static final File UNLOCKED_WALLET_DIR_1 = new File(MOUNT_POINT_FILE, REV_WALLET_1);
 
-    protected static final String REV_WALLET_2 = "1111ocWgUJb5QqnYCvKiPtzcmMyfvD3gS5Eg84NtaLkUtRfw3TDS8"; // AutoProposer
-    protected static final String PRIVATE_KEY_2 = "61e594124ca6af84a5468d98b34a4f3431ef39c54c6cf07fe6fbf8b079ef64f6"; // AutoProposer
+    protected static final String REV_WALLET_2 = "1111ocWgUJb5QqnYCvKiPtzcmMyfvD3gS5Eg84NtaLkUtRfw3TDS8"; // Wallet_2
+    protected static final String PRIVATE_KEY_2 = "61e594124ca6af84a5468d98b34a4f3431ef39c54c6cf07fe6fbf8b079ef64f6"; // Wallet_2
     protected static final File LOCKED_WALLET_DIR_2 = new File(MOUNT_POINT_FILE, "LOCKED-REMOTE-REV-" + REV_WALLET_2);
     protected static final File UNLOCKED_WALLET_DIR_2 = new File(MOUNT_POINT_FILE, REV_WALLET_2);
 
     public static final DockerImageName F1R3FLY_IMAGE = DockerImageName.parse(
-        "f1r3flyindustries/f1r3fly-scala-node:latest");
+        "f1r3flyindustries/f1r3fly-rust-node:latest");
 
     protected static GenericContainer<?> f1r3flyBoot;
     protected static String f1r3flyBootAddress;
@@ -66,10 +65,10 @@ public class F1R3DriveTestFixture {
     protected static F1r3DriveFuse f1r3DriveFuse;
     protected static F1r3flyBlockchainClient f1R3FlyBlockchainClient;
 
-    protected static AutoProposer autoProposer;
+
 
     @BeforeEach
-    void setupContainers() throws InterruptedException {
+    void setUp() throws InterruptedException {
         deleteDirectories();
 
         listAppender.start();
@@ -77,16 +76,44 @@ public class F1R3DriveTestFixture {
 
         // Create a network for containers to communicate
         network = Network.newNetwork();
+    }
 
+    /**
+     * Starts the boot and observer Docker containers.
+     *
+     * @param heartbeatEnabled if true, enables the node's built-in Heartbeat proposer
+     *                         with aggressive intervals for fast test feedback.
+     *                         Use true for auto-propose tests, false for manual-propose tests.
+     */
+    void startContainers(boolean heartbeatEnabled) throws InterruptedException {
         String bootAlias = "f1r3fly-boot";
         String observerAlias = "f1r3fly-observer";
-        // Boot node command args (passed to rnode via entrypoint)
-        String bootRunArgs = "run -s --no-upnp --allow-private-addresses"
-                + " --host " + bootAlias
-                + " --api-max-blocks-limit " + MAX_BLOCK_LIMIT
-                + " --api-grpc-max-recv-message-size " + MAX_MESSAGE_SIZE
-                + " --required-signatures 0"
-                + " --synchrony-constraint-threshold=0.0 --validator-private-key " + validatorPrivateKey;
+
+        // Build boot node command args (Rust node CLI flags)
+        java.util.List<String> bootCommand = new java.util.ArrayList<>(java.util.Arrays.asList(
+            "run", "--standalone", "--no-upnp", "--allow-private-addresses",
+            "--host", bootAlias,
+            "--api-host", "0.0.0.0",
+            "--api-max-blocks-limit", String.valueOf(MAX_BLOCK_LIMIT),
+            "--required-signatures", "0",
+            "--synchrony-constraint-threshold", "0.0",
+            "--max-number-of-parents", "9",
+            "--validator-private-key", validatorPrivateKey
+        ));
+
+        if (heartbeatEnabled) {
+            bootCommand.addAll(java.util.Arrays.asList(
+                "--heartbeat-enabled",
+                "--heartbeat-check-interval", "5s",
+                "--heartbeat-max-lfb-age", "10s"
+            ));
+            log.info("Heartbeat proposer ENABLED (check=5s, max-lfb-age=10s)");
+        } else {
+            bootCommand.addAll(java.util.Arrays.asList(
+                "--heartbeat-disabled"
+            ));
+            log.info("Heartbeat proposer DISABLED (manual propose mode)");
+        }
 
         f1r3flyBoot = new GenericContainer<>(F1R3FLY_IMAGE)
             // Stage config files + init script (Docker volume at /var/lib/rnode hides files copied there)
@@ -109,20 +136,13 @@ public class F1R3DriveTestFixture {
                         .withTarget("/var/lib/rnode")
                 ));
             })
-            .withCommand("run", "-s", "--no-upnp", "--allow-private-addresses",
-                "--host", bootAlias,
-                "--api-max-blocks-limit", String.valueOf(MAX_BLOCK_LIMIT),
-                "--api-grpc-max-recv-message-size", String.valueOf(MAX_MESSAGE_SIZE),
-                "--required-signatures", "0",
-                "--synchrony-constraint-threshold=0.0",
-                "--validator-private-key", validatorPrivateKey)
-            .withEnv("JAVA_TOOL_OPTIONS", "-Xmx2g")
+            .withCommand(bootCommand.toArray(new String[0]))
             .waitingFor(Wait.forListeningPorts(GRPC_PORT))
             .withNetwork(network)
             .withNetworkAliases(bootAlias)
             .withStartupTimeout(STARTUP_TIMEOUT);
 
-        f1r3flyBoot.start(); // Manually start the container
+        f1r3flyBoot.start();
 
         // Use container network alias for container-to-container communication
         f1r3flyBootAddress = "rnode://1e780e5dfbe0a3d9470a2b414f502d59402e09c2@" + bootAlias + "?protocol="
@@ -143,11 +163,11 @@ public class F1R3DriveTestFixture {
                         .withTarget("/var/lib/rnode")
                 ));
             })
-            .withCommand("run", "-b", f1r3flyBootAddress, "--allow-private-addresses", "--no-upnp",
+            .withCommand("run", "--bootstrap", f1r3flyBootAddress, "--allow-private-addresses", "--no-upnp",
                 "--host", observerAlias,
-                "--approve-duration", "10seconds", "--approve-interval", "10seconds",
-                "--fork-choice-check-if-stale-interval", "30seconds", "--fork-choice-stale-threshold", "30seconds")
-            .withEnv("JAVA_TOOL_OPTIONS", "-Xmx2g")
+                "--api-host", "0.0.0.0",
+                "--approve-duration", "10s", "--approve-interval", "10s",
+                "--fork-choice-check-if-stale-interval", "30s", "--fork-choice-stale-threshold", "30s")
             .waitingFor(Wait.forListeningPorts(GRPC_PORT))
             .withNetwork(network)
             .withNetworkAliases(observerAlias)
@@ -164,7 +184,16 @@ public class F1R3DriveTestFixture {
         waitForPortToOpen("localhost", f1r3flyObserver.getMappedPort(GRPC_PORT), STARTUP_TIMEOUT);
     }
 
+    /**
+     * Starts containers and mounts F1R3Drive.
+     *
+     * @param manualPropose if true, manual propose mode (no heartbeat).
+     *                      if false, auto propose mode (heartbeat enabled on the node).
+     */
     void mountF1r3Drive(boolean manualPropose) throws InterruptedException {
+        // Start containers with heartbeat enabled for auto-propose tests
+        startContainers(!manualPropose);
+
         new File("/tmp/cipher.key").delete(); // remove key file if exists
 
         AESCipher.init("/tmp/cipher.key"); // file doesn't exist, so new key will be generated there
@@ -209,22 +238,6 @@ public class F1R3DriveTestFixture {
                 Thread.sleep(waitTime);
                 waitTime = Math.min(waitTime * 2, 5000);
             }
-        }
-    }
-
-    void startAutoProposer() {
-        autoProposer = new AutoProposer(
-            "localhost", f1r3flyBoot.getMappedPort(GRPC_PORT),
-            PRIVATE_KEY_2);
-
-        autoProposer.start();
-    }
-
-    @AfterEach
-    void stopAutoProposer() {
-        if (autoProposer != null) {
-            autoProposer.shutdown();
-            autoProposer = null;
         }
     }
 

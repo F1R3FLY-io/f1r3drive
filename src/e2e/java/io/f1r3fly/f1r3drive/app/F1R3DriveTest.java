@@ -277,12 +277,10 @@ class F1R3DriveTest extends F1R3DriveTestFixture {
     }
 
     @Test
-    @DisplayName("Should perform CRUD operations on directories: create, rename, list, and delete (auto propose)")
+    @DisplayName("Should perform CRUD operations on directories: create, rename, list, and delete (auto propose via Heartbeat)")
     void shouldCreateRenameListDeleteDirectoriesAutoPropose() throws InterruptedException {
 
         mountF1r3Drive(false);
-
-        startAutoProposer();
 
         assertUnlockWalletDirectory(REV_WALLET_1, PRIVATE_KEY_1);
 
