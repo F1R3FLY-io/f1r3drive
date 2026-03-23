@@ -1336,7 +1336,7 @@ public class InMemoryFileSystem implements FileSystem {
 
         DeployServiceCommon.DeployInfo tokenInitializeDeploy = deploys
                 .stream()
-                .filter(deployInfo -> deployInfo.getTerm().contains("revVaultInitCh"))
+                .filter(deployInfo -> deployInfo.getTerm().contains("systemVaultInitCh"))
                 .findFirst()
                 .orElseThrow(() -> new F1r3DriveError(
                         "Token initialize deploy not found in genesis block"));
