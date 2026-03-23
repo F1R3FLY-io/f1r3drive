@@ -4,6 +4,7 @@ import io.f1r3fly.f1r3drive.app.linux.fuse.F1r3DriveFuse;
 import io.f1r3fly.f1r3drive.encryption.AESCipher;
 import io.f1r3fly.f1r3drive.blockchain.client.F1r3flyBlockchainClient;
 import picocli.CommandLine;
+import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -11,8 +12,9 @@ import picocli.CommandLine.Parameters;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 
-@Command(name = "f1r3FUSE", mixinStandardHelpOptions = true, version = "f1r3FUSE 1.0",
-    description = "A FUSE filesystem based on the F1r3fly blockchain.")
+@Command(name = "f1r3drive", mixinStandardHelpOptions = true,
+    version = "f1r3drive 0.1.1", // NOTE: keep in sync with gradle.properties
+    description = "A FUSE filesystem that stores data on the F1r3fly blockchain.")
 class F1r3DriveCli implements Callable<Integer> {
 
     private static final String[] MOUNT_OPTIONS = {
@@ -22,34 +24,63 @@ class F1r3DriveCli implements Callable<Integer> {
                 "-s"  // Single-threaded mode for better FUSE2 compatibility and safety
     };
 
-    @Option(names = {"-h", "--validator-host"}, description = "Host of the F1r3fly blockchain internal gRPC API to connect to. Defaults to localhost.")
+    // --- Blockchain connection ---
+
+    @Option(names = {"-H", "--host"},
+        description = "Host of the F1r3fly validator gRPC API (default: ${DEFAULT-VALUE}).")
     private String validatorHost = "localhost";
 
-    @Option(names = {"-p", "--validator-port"}, description = "Port of the F1r3fly blockchain internal gRPC API to connect to. Defaults to 40402.")
+    @Option(names = {"-P", "--port"},
+        description = "Port of the F1r3fly validator gRPC API (default: ${DEFAULT-VALUE}).")
     private int validatorPort = 40402;
 
-    @Option(names = {"-oh", "--observer-host"}, description = "Host of the F1r3fly blockchain observer gRPC API to connect to. Defaults to localhost.")
+    @Option(names = {"-O", "--observer-host"},
+        description = "Host of the F1r3fly observer gRPC API (default: ${DEFAULT-VALUE}).")
     private String observerHost = "localhost";
 
-    @Option(names = {"-op", "--observer-port"}, description = "Port of the F1r3fly blockchain observer gRPC API to connect to. Defaults to 40403.")
+    @Option(names = {"--observer-port"},
+        description = "Port of the F1r3fly observer gRPC API (default: ${DEFAULT-VALUE}).")
     private int observerPort = 40403;
 
-    @Option(names = {"-ck", "--cipher-key-path"}, required = true, description = "Cipher key path. If file not found, a new key will be generated.")
+    // --- Security ---
+
+    @Option(names = {"-k", "--key-file"}, required = true,
+        description = "Path to the AES cipher key file. A new key is generated if the file does not exist.")
     private String cipherKeyPath;
 
-    @Parameters(index = "0", description = "The path at which to mount the filesystem.")
+    // --- Mount point ---
+
+    @Parameters(index = "0",
+        description = "Directory path where the FUSE filesystem will be mounted.")
     private Path mountPoint;
 
-    @Option(names = {"-ra", "--rev-address"}, description = "The rev address of the wallet to unlock.")
-    private String revAddress;
+    // --- Wallet / identity ---
 
-    @Option(names = {"-pk", "--private-key"}, description = "The private key of the wallet to unlock.")
-    private String privateKey;
+    static class WalletOptions {
+        @Option(names = {"-a", "--address"}, required = true,
+            description = "REV address of the wallet to unlock.")
+        String revAddress;
 
-    @Option(names = {"-mp", "--manual-propose"}, required = true, description = "Manual propose configuration. If true, will propose and wait for finalization. If false, will skip propose and finalization waiting.")
-    private boolean manualPropose;
+        @Option(names = {"-K", "--private-key"}, required = true,
+            description = "Private key of the wallet (must be used together with --address).")
+        String privateKey;
+    }
 
-    @Option(names = {"-d", "--debug"}, description = "Enable FUSE debug mode for verbose logging of filesystem operations.")
+    @ArgGroup(exclusive = false, multiplicity = "0..1")
+    private WalletOptions wallet;
+
+    // --- Propose mode ---
+
+    @Option(names = {"--auto-propose"},
+        description = "Enable auto-propose mode: skip manual propose and finalization waiting. " +
+            "Use when the shard handles block proposals automatically (e.g. heartbeat or autopropose service). " +
+            "Without this flag, F1r3Drive proposes blocks manually after each deploy.")
+    private boolean autoPropose = false;
+
+    // --- Debug ---
+
+    @Option(names = {"-d", "--debug"},
+        description = "Enable FUSE debug mode for verbose logging of filesystem operations.")
     private boolean fuseDebug = false;
 
     private F1r3DriveFuse f1r3DriveFuse;
@@ -58,6 +89,9 @@ class F1r3DriveCli implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         AESCipher.init(cipherKeyPath); // init singleton instance
+
+        // autoPropose means skip manual propose; manualPropose is the inverse
+        boolean manualPropose = !autoPropose;
 
         F1r3flyBlockchainClient f1R3FlyBlockchainClient = new F1r3flyBlockchainClient(
             validatorHost,
@@ -83,16 +117,14 @@ class F1r3DriveCli implements Callable<Integer> {
         }, "F1r3Drive-Shutdown"));
 
         // Mount filesystem - unmounting is handled by shutdown hook
-        if (revAddress != null && privateKey != null) {
-            f1r3DriveFuse.mountAndUnlockRootDirectory(mountPoint, true, fuseDebug, revAddress, privateKey, MOUNT_OPTIONS);
+        if (wallet != null) {
+            f1r3DriveFuse.mountAndUnlockRootDirectory(mountPoint, true, fuseDebug, wallet.revAddress, wallet.privateKey, MOUNT_OPTIONS);
         } else {
             f1r3DriveFuse.mount(mountPoint, true, fuseDebug, MOUNT_OPTIONS);
         }
         return 0;
     }
 
-    // this example implements Callable, so parsing, error handling and handling user
-    // requests for usage help or version help can be done with one line of code.
     public static void main(String... args) {
         int exitCode = new CommandLine(new F1r3DriveCli()).execute(args);
         System.exit(exitCode);
