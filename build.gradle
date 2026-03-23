@@ -127,9 +127,13 @@ configurations {
 }
 
 dependencies {
-    api 'com.github.jnr:jnr-ffi:2.2.15'
-    api 'com.github.jnr:jnr-posix:3.1.18'
+    api 'com.github.jnr:jnr-ffi:2.2.17'
+    api 'com.github.jnr:jnr-posix:3.1.19'
     api 'com.github.jnr:jnr-constants:0.10.4'
+
+    implementation 'com.github.serceman:jnr-fuse:0.5.8'
+    implementation 'com.github.jnr:jffi:1.3.10'
+    implementation 'com.github.jnr:jffi:1.3.10:native'
 
     implementation group: 'javax.annotation', name: 'javax.annotation-api', version: '1.3.2'
 

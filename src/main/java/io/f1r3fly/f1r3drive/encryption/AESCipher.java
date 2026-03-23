@@ -1,6 +1,6 @@
 package io.f1r3fly.f1r3drive.encryption;
 
-import io.f1r3fly.f1r3drive.fuse.FuseException;
+import ru.serce.jnrfuse.FuseException;
 
 import javax.crypto.*;
 import javax.crypto.spec.SecretKeySpec;

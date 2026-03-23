@@ -1,7 +1,7 @@
 package io.f1r3fly.f1r3drive.filesystem.common;
 
-import io.f1r3fly.f1r3drive.fuse.struct.FileStat;
-import io.f1r3fly.f1r3drive.fuse.struct.FuseContext;
+import ru.serce.jnrfuse.struct.FileStat;
+import ru.serce.jnrfuse.struct.FuseContext;
 import jnr.ffi.Pointer;
 
 import java.io.IOException;

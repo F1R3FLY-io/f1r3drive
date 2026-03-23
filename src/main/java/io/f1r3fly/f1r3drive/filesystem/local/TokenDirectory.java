@@ -7,9 +7,9 @@ import io.f1r3fly.f1r3drive.filesystem.common.Directory;
 import io.f1r3fly.f1r3drive.filesystem.common.Path;
 import io.f1r3fly.f1r3drive.filesystem.deployable.UnlockedWalletDirectory;
 import io.f1r3fly.f1r3drive.blockchain.rholang.RholangExpressionConstructor;
-import io.f1r3fly.f1r3drive.fuse.FuseFillDir;
-import io.f1r3fly.f1r3drive.fuse.struct.FileStat;
-import io.f1r3fly.f1r3drive.fuse.struct.FuseContext;
+import ru.serce.jnrfuse.FuseFillDir;
+import ru.serce.jnrfuse.struct.FileStat;
+import ru.serce.jnrfuse.struct.FuseContext;
 import jnr.ffi.Pointer;
 
 import org.slf4j.Logger;
