@@ -5,6 +5,16 @@ import jnr.ffi.Struct;
 import jnr.posix.util.Platform;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import ru.serce.jnrfuse.struct.FileStat;
+import ru.serce.jnrfuse.struct.Flock;
+import ru.serce.jnrfuse.struct.FuseBuf;
+import ru.serce.jnrfuse.struct.FuseBufvec;
+import ru.serce.jnrfuse.struct.FuseContext;
+import ru.serce.jnrfuse.struct.FuseFileInfo;
+import ru.serce.jnrfuse.struct.FuseOperations;
+import ru.serce.jnrfuse.struct.FusePollhandle;
+import ru.serce.jnrfuse.struct.Statvfs;
+import ru.serce.jnrfuse.struct.Timespec;
 
 import java.util.Map;
 import java.util.function.Function;
@@ -42,7 +52,7 @@ public class StructSizeTest {
                     Utils.Pair.pair(LINUX, platformSize(96, 144)), //
                     Utils.Pair.pair(WINDOWS, platformSize(128, 128)), //
                     Utils.Pair.pair(DARWIN, platformSize(96, 144)))),
-            Utils.Pair.pair(FuseFileInfo.class, Utils.asMap(
+            Utils.Pair.pair(TestFuseFileInfo.class, Utils.asMap(
                     Utils.Pair.pair(LINUX, platformSize(32, 40)), //
                     Utils.Pair.pair(WINDOWS, platformSize(32, 32)), //
                     Utils.Pair.pair(DARWIN, platformSize(32, 40)))),
@@ -50,15 +60,15 @@ public class StructSizeTest {
                     Utils.Pair.pair(LINUX, platformSize(180, 360)), //
                     Utils.Pair.pair(WINDOWS, platformSize(180, 360)), //
                     Utils.Pair.pair(DARWIN, platformSize(232, 464)))),
-            Utils.Pair.pair(Timespec.class, Utils.asMap(
+            Utils.Pair.pair(TestTimespec.class, Utils.asMap(
                     Utils.Pair.pair(LINUX, platformSize(8, 16)), //
                     Utils.Pair.pair(WINDOWS, platformSize(8, 16)), //
                     Utils.Pair.pair(DARWIN, platformSize(8, 16)))),
-            Utils.Pair.pair(Flock.class, Utils.asMap(
+            Utils.Pair.pair(TestFlock.class, Utils.asMap(
                     Utils.Pair.pair(LINUX, platformSize(24, 32)), //
                     Utils.Pair.pair(WINDOWS, platformSize(24, 32)), //
                     Utils.Pair.pair(DARWIN, platformSize(24, 24)))),
-            Utils.Pair.pair(FuseBuf.class, Utils.asMap(
+            Utils.Pair.pair(TestFuseBuf.class, Utils.asMap(
                     Utils.Pair.pair(LINUX, platformSize(24, 40)), //
                     Utils.Pair.pair(WINDOWS, platformSize(24, 40)), //
                     Utils.Pair.pair(DARWIN, platformSize(24, 40)))),
@@ -66,7 +76,7 @@ public class StructSizeTest {
                     Utils.Pair.pair(LINUX, platformSize(36, 64)), //
                     Utils.Pair.pair(WINDOWS, platformSize(36, 64)), //
                     Utils.Pair.pair(DARWIN, platformSize(36, 64)))),
-            Utils.Pair.pair(FusePollhandle.class, Utils.asMap(
+            Utils.Pair.pair(TestFusePollhandle.class, Utils.asMap(
                     Utils.Pair.pair(LINUX, platformSize(16, 24)), //
                     Utils.Pair.pair(WINDOWS, platformSize(16, 24)), //
                     Utils.Pair.pair(DARWIN, platformSize(16, 24)))),
@@ -105,7 +115,7 @@ public class StructSizeTest {
 
     @Test
     public void testFuseFileInfo() {
-        assertPlatfomValue(FuseFileInfo::new);
+        assertPlatfomValue(TestFuseFileInfo::new);
     }
 
     @Test
@@ -115,17 +125,17 @@ public class StructSizeTest {
 
     @Test
     public void testTimeSpec() {
-        assertPlatfomValue(Timespec::new);
+        assertPlatfomValue(TestTimespec::new);
     }
 
     @Test
     public void testFlock() {
-        assertPlatfomValue(Flock::new);
+        assertPlatfomValue(TestFlock::new);
     }
 
     @Test
     public void testFuseBuf() {
-        assertPlatfomValue(FuseBuf::new);
+        assertPlatfomValue(TestFuseBuf::new);
     }
 
     @Test
@@ -135,7 +145,7 @@ public class StructSizeTest {
 
     @Test
     public void testFusePollhandle() {
-        assertPlatfomValue(FusePollhandle::new);
+        assertPlatfomValue(TestFusePollhandle::new);
     }
 
     @Test

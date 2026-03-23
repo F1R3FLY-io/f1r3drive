@@ -24,6 +24,7 @@ public class PathUtils {
     }
 
     public static boolean isAppleMetadataFile(String path) {
-        return path.contains(".DS_Store") || path.contains("._.");
+        String filename = getFileName(path);
+        return filename.equals(".DS_Store") || filename.startsWith("._");
     }
 }

@@ -1,4 +1,4 @@
-package io.f1r3fly.f1r3drive.app;
+package io.f1r3fly.f1r3drive.app.linux.fuse;
 
 import io.f1r3fly.f1r3drive.filesystem.FileSystemAction;
 import io.f1r3fly.f1r3drive.errors.*;
@@ -191,7 +191,7 @@ public class F1r3DriveFuse extends FuseStubFS {
                 LOGGER.debug("Rejecting Apple metadata file: {}", path);
                 return -ErrorCodes.ENOENT();
             }
-            fileSystem.getAttributes(path, stat, getContext());
+            fileSystem.getAttributes(path, FuseAdapter.fromFuseFileStat(stat), FuseAdapter.fromFuseContext(getContext()));
             return 0;
         });
     }
@@ -207,14 +207,14 @@ public class F1r3DriveFuse extends FuseStubFS {
     @Override
     public int read(String path, Pointer buf, @size_t long size, @off_t long offset, FuseFileInfo fi) {
         return executeWithErrorHandling(path, FileSystemAction.FUSE_READ, () -> {
-            return fileSystem.readFile(path, buf, size, offset);
+            return fileSystem.readFile(path, FuseAdapter.fromFusePointer(buf), size, offset);
         });
     }
 
     @Override
     public int readdir(String path, Pointer buf, FuseFillDir filter, @off_t long offset, FuseFileInfo fi) {
         return executeWithErrorHandling(path, FileSystemAction.FUSE_READDIR, () -> {
-            fileSystem.readDirectory(path, buf, filter);
+            fileSystem.readDirectory(path, FuseAdapter.fromFuseFillDir(buf, filter));
             return 0;
         });
     }
@@ -222,7 +222,7 @@ public class F1r3DriveFuse extends FuseStubFS {
     @Override
     public int statfs(String path, Statvfs stbuf) {
         return executeWithErrorHandling(path, FileSystemAction.FUSE_READ, () -> {
-            fileSystem.getFileSystemStats(path, stbuf);
+            fileSystem.getFileSystemStats(path, FuseAdapter.fromFuseStatVfs(stbuf));
             return super.statfs(path, stbuf);
         });
     }
@@ -276,7 +276,7 @@ public class F1r3DriveFuse extends FuseStubFS {
     @Override
     public int write(String path, Pointer buf, @size_t long size, @off_t long offset, FuseFileInfo fi) {
         return executeWithErrorHandling(path, FileSystemAction.FUSE_WRITE, () -> {
-            return fileSystem.writeFile(path, buf, size, offset);
+            return fileSystem.writeFile(path, FuseAdapter.fromFusePointer(buf), size, offset);
         });
     }
 

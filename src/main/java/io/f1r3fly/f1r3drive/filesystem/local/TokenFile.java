@@ -2,10 +2,10 @@ package io.f1r3fly.f1r3drive.filesystem.local;
 
 import io.f1r3fly.f1r3drive.errors.OperationNotPermitted;
 import io.f1r3fly.f1r3drive.blockchain.BlockchainContext;
+import io.f1r3fly.f1r3drive.filesystem.bridge.FSPointer;
 import io.f1r3fly.f1r3drive.filesystem.common.Directory;
 import io.f1r3fly.f1r3drive.filesystem.common.File;
 import io.f1r3fly.f1r3drive.filesystem.deployable.UnlockedWalletDirectory;
-import jnr.ffi.Pointer;
 
 public class TokenFile extends AbstractLocalPath implements File {
 
@@ -18,9 +18,9 @@ public class TokenFile extends AbstractLocalPath implements File {
     }
 
     @Override
-    public int read(Pointer buffer, long size, long offset)  { return 0; }
+    public int read(FSPointer buffer, long size, long offset)  { return 0; }
     @Override
-    public int write(Pointer buffer, long bufSize, long writeOffset) { return 0;}
+    public int write(FSPointer buffer, long bufSize, long writeOffset) { return 0;}
     @Override
     public void truncate(long offset) {}
     @Override

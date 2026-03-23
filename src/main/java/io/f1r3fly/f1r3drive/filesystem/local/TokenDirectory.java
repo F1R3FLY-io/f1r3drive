@@ -3,14 +3,13 @@ package io.f1r3fly.f1r3drive.filesystem.local;
 import io.f1r3fly.f1r3drive.errors.F1r3DriveError;
 import io.f1r3fly.f1r3drive.errors.OperationNotPermitted;
 import io.f1r3fly.f1r3drive.blockchain.BlockchainContext;
+import io.f1r3fly.f1r3drive.filesystem.bridge.FSContext;
+import io.f1r3fly.f1r3drive.filesystem.bridge.FSFillDir;
+import io.f1r3fly.f1r3drive.filesystem.bridge.FSFileStat;
 import io.f1r3fly.f1r3drive.filesystem.common.Directory;
 import io.f1r3fly.f1r3drive.filesystem.common.Path;
 import io.f1r3fly.f1r3drive.filesystem.deployable.UnlockedWalletDirectory;
 import io.f1r3fly.f1r3drive.blockchain.rholang.RholangExpressionConstructor;
-import ru.serce.jnrfuse.FuseFillDir;
-import ru.serce.jnrfuse.struct.FileStat;
-import ru.serce.jnrfuse.struct.FuseContext;
-import jnr.ffi.Pointer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -148,11 +147,11 @@ public class TokenDirectory extends AbstractLocalPath implements Directory {
     }
 
     @Override
-    public void getAttr(FileStat stat, FuseContext fuseContext) {
-        stat.st_mode.set(FileStat.S_IFDIR | 0777); // Read-only permissions
-        stat.st_uid.set(fuseContext.uid.get());
-        stat.st_gid.set(fuseContext.gid.get());
-        stat.st_nlink.set(1);
+    public void getAttr(FSFileStat stat, FSContext context) {
+        stat.setMode(FSFileStat.S_IFDIR | 0777); // Read-only permissions
+        stat.setUid(context.getUid());
+        stat.setGid(context.getGid());
+        stat.setModificationTime(getLastUpdated());
     }
 
     /**
@@ -204,12 +203,12 @@ public class TokenDirectory extends AbstractLocalPath implements Directory {
     }
 
     @Override
-    public void read(Pointer buf, FuseFillDir filler) {
+    public void read(FSFillDir filler) {
         if (balanceChanged) {
             recreateTokenFiles();
             balanceChanged = false;
         }
-        Directory.super.read(buf, filler);
+        Directory.super.read(filler);
     }
 
     @Override
