@@ -84,11 +84,11 @@ class F1r3DriveCli implements Callable<Integer> {
 
     // --- Propose mode ---
 
-    @Option(names = {"--auto-propose"},
-        description = "Enable auto-propose mode: skip manual propose and finalization waiting. " +
-            "Use when the shard handles block proposals automatically (e.g. heartbeat or autopropose service). " +
-            "Without this flag, F1r3Drive proposes blocks manually after each deploy.")
-    private boolean autoPropose = false;
+    @Option(names = {"--manual-propose"},
+        description = "Enable manual block proposing after each deploy and wait for finalization. " +
+            "Without this flag (default), F1r3Drive skips proposing and expects the shard to handle it " +
+            "(e.g. heartbeat or autopropose service).")
+    private boolean manualPropose = false;
 
     // --- Debug ---
 
@@ -102,9 +102,6 @@ class F1r3DriveCli implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         AESCipher.init(cipherKeyPath); // init singleton instance
-
-        // autoPropose means skip manual propose; manualPropose is the inverse
-        boolean manualPropose = !autoPropose;
 
         F1r3flyBlockchainClient f1R3FlyBlockchainClient = new F1r3flyBlockchainClient(
             validatorHost,

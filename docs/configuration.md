@@ -67,10 +67,10 @@ When both `--address` and `--private-key` are provided, F1r3Drive mounts the fil
 
 | Short | Long | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| — | `--auto-propose` | No | `false` | Enable auto-propose mode. |
+| — | `--manual-propose` | No | `false` | Enable manual block proposing. |
 
-- **Without `--auto-propose`** (default) — F1r3Drive proposes blocks manually after each deploy and waits for finalization. Use this for development and testing against shards without an auto-propose mechanism.
-- **With `--auto-propose`** — F1r3Drive deploys contracts but does not propose. The shard is expected to handle block proposals automatically (e.g., via the heartbeat proposer or the `autopropose` service in `shard-with-autopropose.yml`). Use this for production shards.
+- **Without `--manual-propose`** (default) — F1r3Drive deploys contracts but does not propose. The shard is expected to handle block proposals automatically (e.g., via the heartbeat proposer or the `autopropose` service in `shard-with-autopropose.yml`). Use this for production shards.
+- **With `--manual-propose`** — F1r3Drive proposes blocks manually after each deploy and waits for finalization. Use this for development and testing against shards without an auto-propose mechanism.
 
 ### Debugging
 
@@ -98,7 +98,6 @@ java -jar build/libs/f1r3drive-0.1.1.jar ~/demo-f1r3drive \
   --key-file ~/cipher.key \
   --host localhost --port 40402 \
   --observer-host localhost --observer-port 40403 \
-  --auto-propose \
   --address 111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA \
   --private-key 357cdc4201a5650830e0bc5a03299a30038d9934ba4c7ab73ec164ad82471ff9
 ```
@@ -110,6 +109,7 @@ java -jar build/libs/f1r3drive-0.1.1.jar ~/demo-f1r3drive \
   --key-file ~/cipher.key \
   --host localhost --port 40402 \
   --observer-host localhost --observer-port 40403 \
+  --manual-propose \
   --address 111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA \
   --private-key 357cdc4201a5650830e0bc5a03299a30038d9934ba4c7ab73ec164ad82471ff9
 ```
@@ -118,7 +118,8 @@ java -jar build/libs/f1r3drive-0.1.1.jar ~/demo-f1r3drive \
 
 ```bash
 java -jar build/libs/f1r3drive-0.1.1.jar ~/demo-f1r3drive \
-  --key-file ~/cipher.key
+  --key-file ~/cipher.key \
+  --manual-propose
 ```
 
 ### Remote shard
@@ -128,7 +129,6 @@ java -jar f1r3drive-0.1.1.jar ~/f1r3drive-mount \
   --key-file ~/.f1r3drive/cipher.key \
   --host node.f1r3fly.io --port 40402 \
   --observer-host node.f1r3fly.io --observer-port 40403 \
-  --auto-propose \
   --address <your-rev-address> \
   --private-key <your-private-key>
 ```

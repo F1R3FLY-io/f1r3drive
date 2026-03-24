@@ -81,7 +81,7 @@ The resulting JAR will be at `build/libs/f1r3drive-<version>.jar`.
 ```bash
 java -jar f1r3drive-<version>.jar <mount-point> \
   --key-file <path-to-key> \
-  [--auto-propose] \
+  [--manual-propose] \
   [--host <host>] [--port <port>] \
   [--observer-host <host>] [--observer-port <port>] \
   [--address <rev-address> --private-key <key>] \
@@ -97,7 +97,6 @@ java -jar build/libs/f1r3drive-0.1.1.jar ~/demo-f1r3drive \
   --key-file ~/cipher.key \
   --host localhost --port 40402 \
   --observer-host localhost --observer-port 40403 \
-  --auto-propose \
   --address 111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA \
   --private-key 357cdc4201a5650830e0bc5a03299a30038d9934ba4c7ab73ec164ad82471ff9
 ```
