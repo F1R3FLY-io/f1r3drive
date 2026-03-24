@@ -9,6 +9,15 @@ The only strict prerequisite is having the FUSE libraries installed for your ope
 - **macOS** — install [macFUSE](https://github.com/macfuse/macfuse/wiki/Getting-Started).
 - **Linux / Windows** — see the [jnr-fuse installation guide](INSTALLATION.md).
 
+### macOS Finder Extension (Optional)
+
+For advanced file and folder operations in Finder (such as custom sync badges and context menus), you can install the [F1r3Drive Extension](https://github.com/F1R3FLY-io/f1r3drive-extension). 
+
+This extension is **optional**. Without it, the basic FUSE functionality works perfectly out of the box:
+- Unlocking a single root folder
+- Basic read/write operations for files and folders
+- Accessing the hidden `.token` configuration folder
+
 ## Getting Started
 
 There are two parts to using F1r3Drive: running a F1r3fly shard and running the F1r3Drive application.
