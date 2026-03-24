@@ -105,7 +105,7 @@ class F1r3DriveCli implements Callable<Integer> {
             f1R3FlyBlockchainClient
         );
 
-        // Add shutdown hook to ensure proper unmounting on Ctrl+C
+        // Add shutdown hook to ensure proper unmounting on Ctrl+C or kill
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             if (f1r3DriveFuse != null) {
                 try {
@@ -115,6 +115,25 @@ class F1r3DriveCli implements Callable<Integer> {
                 }
             }
         }, "F1r3Drive-Shutdown"));
+
+        try {
+            sun.misc.Signal.handle(new sun.misc.Signal("INT"), new sun.misc.SignalHandler() {
+                private int count = 0;
+                @Override
+                public void handle(sun.misc.Signal sig) {
+                    count++;
+                    if (count >= 2) {
+                        System.err.println("\nDouble Ctrl+C detected. Forcing hard stop!");
+                        Runtime.getRuntime().halt(130);
+                    } else {
+                        System.err.println("\nInterrupt received. Unmounting... (Press Ctrl+C again to force quit)");
+                        new Thread(() -> System.exit(130)).start();
+                    }
+                }
+            });
+        } catch (Throwable t) {
+            System.err.println("Signal handling to detect double Ctrl+C not supported: " + t.getMessage());
+        }
 
         // Mount filesystem - unmounting is handled by shutdown hook
         if (wallet != null) {
