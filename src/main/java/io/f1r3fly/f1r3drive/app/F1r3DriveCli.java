@@ -17,12 +17,25 @@ import java.util.concurrent.Callable;
     description = "A FUSE filesystem that stores data on the F1r3fly blockchain.")
 class F1r3DriveCli implements Callable<Integer> {
 
-    private static final String[] MOUNT_OPTIONS = {
-        // Linux-compatible FUSE mount options
+    private static String[] getMountOptions() {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("mac")) {
+            return new String[] {
+                "-o", "fsname=f1r3drive",
+                "-o", "volname=F1r3Drive",
+                "-o", "local",
+                "-o", "noappledouble",
+                "-o", "noatime",
+                "-s"
+            };
+        } else {
+            return new String[] {
                 "-o", "fsname=f1r3drive",
                 "-o", "noatime",
-                "-s"  // Single-threaded mode for better FUSE2 compatibility and safety
-    };
+                "-s"
+            };
+        }
+    }
 
     // --- Blockchain connection ---
 
@@ -137,9 +150,9 @@ class F1r3DriveCli implements Callable<Integer> {
 
         // Mount filesystem - unmounting is handled by shutdown hook
         if (wallet != null) {
-            f1r3DriveFuse.mountAndUnlockRootDirectory(mountPoint, true, fuseDebug, wallet.revAddress, wallet.privateKey, MOUNT_OPTIONS);
+            f1r3DriveFuse.mountAndUnlockRootDirectory(mountPoint, true, fuseDebug, wallet.revAddress, wallet.privateKey, getMountOptions());
         } else {
-            f1r3DriveFuse.mount(mountPoint, true, fuseDebug, MOUNT_OPTIONS);
+            f1r3DriveFuse.mount(mountPoint, true, fuseDebug, getMountOptions());
         }
         return 0;
     }
