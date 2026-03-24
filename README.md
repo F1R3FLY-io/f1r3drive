@@ -9,14 +9,19 @@ The only strict prerequisite is having the FUSE libraries installed for your ope
 - **macOS** — install [macFUSE](https://github.com/macfuse/macfuse/wiki/Getting-Started).
 - **Linux / Windows** — see the [jnr-fuse installation guide](INSTALLATION.md).
 
-### macOS Finder Extension (Optional)
+### 🍎 macOS Finder Extension (Optional, but Recommended)
 
-For advanced file and folder operations in Finder (such as custom sync badges and context menus), you can install the [F1r3Drive Extension](https://github.com/F1R3FLY-io/f1r3drive-extension). 
+If you're using a Mac, the core F1r3Drive app gives you everything you need to mount files directly from the blockchain at a basic level:
+- ✅ Unlock and mount a single root folder to your computer
+- ✅ Read, write, and manage files and folders normally
+- ✅ Access the hidden `.token` folder to manage permissions manually
 
-This extension is **optional**. Without it, the basic FUSE functionality works perfectly out of the box:
-- Unlocking a single root folder
-- Basic read/write operations for files and folders
-- Accessing the hidden `.token` configuration folder
+**Want a more native, seamless experience?**
+To get advanced, Dropbox-style features right inside Finder, install the [**F1R3Drive Finder Extension**](https://github.com/F1R3FLY-io/f1r3drive-extension)! 
+
+Installing the extension unlocks:
+- 🎨 **Status Badges**: See exactly which files are synced or pending right on their icons.
+- 🖱️ **Context Menus**: Right-click any file or folder to easily manage `.token` configuration files, share links, or control permissions without opening the terminal.
 
 ## Getting Started
 
