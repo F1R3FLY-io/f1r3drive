@@ -249,3 +249,7 @@ publishing {
 tasks.named('processResources') {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE // or EXCLUDE, depending on desired behavior
 }
+
+tasks.named('processE2eResources') {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}

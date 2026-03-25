@@ -1,62 +1,61 @@
-# Prerequisites
-- [Docker and Docker Compose](https://www.docker.com/)
-- [MacFuse](https://github.com/macfuse/macfuse/wiki/Getting-Started)
+# F1r3Drive Demo
 
-# Running the F1r3fly shard locally
+## Prerequisites
 
-Run shard locally:
+- [MacFuse](https://github.com/macfuse/macfuse/wiki/Getting-Started) (or [jnr-fuse](https://github.com/SerCeMan/jnr-fuse?tab=readme-ov-file#installation) on Linux)
+- Java 17+
+- A running F1R3FLY shard (see below)
+
+## Running the F1r3fly Shard
+
+The recommended way to run a local shard is via **shardctl** from the [system-integration](https://github.com/F1R3FLY-io/system-integration) repository.
+For a complete step-by-step guide (including prerequisites, building, and configuration), see the [F1R3Drive with shardctl guide](https://github.com/F1R3FLY-io/system-integration/blob/main/docs/f1r3drive-guide.md).
+
 ```sh
-cd local-shard
-docker-compose -f shard-with-autopropose.yml up -d
+# From the system-integration repo root:
+shardctl up f1r3node-rust     # Start Rust shard (recommended)
+shardctl wait                 # Wait for nodes to be ready
 ```
 
-Wait for "Listening for traffic" logs:
+Default shard port mappings:
+
+| Node | Validator gRPC | Observer gRPC |
+|------|---------------|---------------|
+| Validator 1 | `localhost:40412` | `localhost:40413` |
+| Read-only Observer | `localhost:40452` | `localhost:40453` |
+
+## Run F1r3Drive app
+
+### Option 1: Via shardctl (Recommended)
+
 ```sh
-docker-compose -f shard-with-autopropose.yml logs
-```
-Logs should be like: 
-```text
-Listening for traffic on rnode://cfae6a0c885d734908f8c756fb0519d2df7fbcec@178.150.31.10?protocol=40400&discovery=40404
+# From the system-integration repo root:
+shardctl up f1r3drive
 ```
 
-Local shard will be configured with the following configurations:
-- [REV Addresses (wallets.txt)](./local-shard/genesis/wallets.txt)
-- nodes (see [local-shard/shard-with-autopropose.yml](local-shard/shard-with-autopropose.yml) for Node configs): 
-  - bootstrap node: `localhost:40402`
-  - observer node: `localhost:40403`
+This builds (if needed) and starts F1R3Drive with the correct connection settings automatically.
 
-**Note**: Make sure you have a `.env` file in the `local-shard/` directory with the required environment variables before running docker-compose.
+### Option 2: Manually with the JAR
 
-# Run F1r3Drive app
+1. Download the latest `f1r3drive-*.jar` from the [GitHub Releases page](https://github.com/f1r3fly-io/F1R3FLYFS/releases), or build locally:
+   ```sh
+   ./gradlew shadowJar -x test
+   ```
 
-1. Download the latest `f1r3drive-*.jar` from the [GitHub Releases page](https://github.com/f1r3fly-io/F1R3FLYFS/releases).
+2. Run with wallet credentials:
 
-2. Run F1r3Drive app with REV Address and Private key. That must be associated with some REV address from [wallets.txt](./local-shard/data/genesis/wallets.txt):
-
-**Auto-Propose Option:**
-- `--auto-propose`: The shard handles block proposals automatically (e.g. via autopropose service or heartbeat). F1r3Drive only deploys.
-- Without `--auto-propose`: F1r3Drive manually proposes and waits for finalization after each deploy (for development/testing).
-
-- If you build the jar locally, run:
 ```sh
-java -jar ./build/libs/f1r3drive-0.1.1.jar ~/demo-f1r3drive \
+java -jar build/libs/f1r3drive-app.jar ~/demo-f1r3drive \
    --key-file ~/cipher.key \
-   --host localhost --port 40402 \
-   --observer-host localhost --observer-port 40403 \
-   --auto-propose \
-   --address 111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA --private-key 357cdc4201a5650830e0bc5a03299a30038d9934ba4c7ab73ec164ad82471ff9
-```
-- If you downloaded the JAR to your `~/Downloads` folder, run:
-```sh
-java -jar ~/Downloads/f1r3drive-0.1.1.jar ~/demo-f1r3drive \
-   --key-file ~/cipher.key \
-   --host localhost --port 40402 \
-   --observer-host localhost --observer-port 40403 \
-   --auto-propose \
-   --address 111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA --private-key 357cdc4201a5650830e0bc5a03299a30038d9934ba4c7ab73ec164ad82471ff9
+   --host localhost --port 40412 \
+   --observer-host localhost --observer-port 40452 \
+   --address 111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA \
+   --private-key 357cdc4201a5650830e0bc5a03299a30038d9934ba4c7ab73ec164ad82471ff9
 ```
 
-# Demo
+> ⚠️ The credentials above are **test-only** keys. Do not use them on public shards.
+
+## Demo
 
 Creating a tiny file inside ~/demo-f1r3drive folder:
 
@@ -80,23 +79,21 @@ cp large_data.txt ~/demo-f1r3drive/111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVv
 ls -lh ~/demo-f1r3drive/111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA/large_data.txt
 ```
 
-# Cleanup
+## Cleanup
 
 Stop all processes and remove all files:
 
 ```sh
-# hit Ctrl+C in F1r3Drive app
+# hit Ctrl+C in F1r3Drive app (or in the shardctl terminal)
 
 # or kill if stuck
 ps aux | grep java | grep -v grep | awk '{print $2}' | xargs kill -9
 
-
 # force unmount ~/demo-f1r3drive if stuck
 sudo diskutil umount force ~/demo-f1r3drive
 
-# stop Shard
-cd local-shard
-docker-compose -f shard-with-autopropose.yml down
+# stop shard (from system-integration repo root)
+shardctl down f1r3node-rust -v
 
 # ~/demo-f1r3drive has to be empty folder
 # delete ~/demo-f1r3drive before running the next time

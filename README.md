@@ -31,37 +31,26 @@ There are two parts to using F1r3Drive: running a F1r3fly shard and running the 
 
 F1r3Drive connects to a F1r3fly node's gRPC API. You can either run a local shard or connect to a remote one.
 
-#### Local Shard with Docker (Recommended)
+#### Local Shard with shardctl (Recommended)
 
-**Requirement:** [Docker and Docker Compose](https://www.docker.com/).
-
-Two Docker Compose configurations are provided in the `local-shard/` directory:
-
-| Config | Nodes | Use case |
-|--------|-------|----------|
-| `shard-with-autopropose.yml` | 1 bootstrap + 3 validators + 1 readonly observer + autopropose service | Full multi-validator shard for realistic testing |
-| `singleton.yml` | 1 bootstrap + 1 readonly observer | Minimal single-node setup for quick development |
+The easiest way to run a local shard is via **shardctl** from the [system-integration](https://github.com/F1R3FLY-io/system-integration) repository.
+For a complete step-by-step guide, see the [F1R3Drive with shardctl guide](https://github.com/F1R3FLY-io/system-integration/blob/main/docs/f1r3drive-guide.md).
 
 ```bash
-cd local-shard
-docker-compose -f shard-with-autopropose.yml up -d
-```
+# From the system-integration repo root:
+shardctl up f1r3node-rust     # Start Rust shard (recommended)
+shardctl wait                 # Wait for nodes to be ready
 
-> **Note**: Make sure you have a `.env` file in the `local-shard/` directory with the required environment variables before running docker-compose. See `local-shard/README.md` for wallet information and genesis configuration.
-
-Wait for the "Listening for traffic" log message before connecting F1r3Drive:
-
-```bash
-docker-compose -f shard-with-autopropose.yml logs -f
+# Start F1R3Drive (builds automatically if needed)
+shardctl up f1r3drive
 ```
 
 **Default port mappings (multi-validator shard):**
 
-| Node | Internal gRPC (deploy) | Observer gRPC |
-|------|----------------------|---------------|
-| Bootstrap | `localhost:40402` | `localhost:40403` |
+| Node | Validator gRPC | Observer gRPC |
+|------|---------------|---------------|
 | Validator 1 | `localhost:40412` | `localhost:40413` |
-| Readonly Observer | `localhost:40442` | `localhost:40443` |
+| Read-only Observer | `localhost:40452` | `localhost:40453` |
 
 #### Connect to a Remote Shard
 
@@ -69,11 +58,21 @@ If you have access to a remote shard, use the `--host`, `--port`, `--observer-ho
 
 ### 2. Running F1r3Drive
 
-#### Option A: Use the Pre-built JAR
+#### Option A: Use shardctl (Recommended)
+
+If you're using the [system-integration](https://github.com/F1R3FLY-io/system-integration) repository, simply run:
+
+```bash
+shardctl up f1r3drive
+```
+
+This automatically builds the JAR (if needed) and starts F1R3Drive with the correct connection settings.
+
+#### Option B: Use the Pre-built JAR
 
 Download the latest `f1r3drive-*.jar` from the [GitHub Releases page](https://github.com/f1r3fly-io/F1R3FLYFS/releases). Requires **Java 17**.
 
-#### Option B: Build from Source
+#### Option C: Build from Source
 
 **Requirements:** [Nix](https://nixos.org/download/), [direnv](https://direnv.net/#basic-installation), [Protobuf Compiler](https://grpc.io/docs/protoc-installation/)
 
@@ -88,7 +87,7 @@ direnv allow
 ./gradlew shadowJar -x test
 ```
 
-The resulting JAR will be at `build/libs/f1r3drive-<version>.jar`.
+The resulting JAR will be at `build/libs/f1r3drive-app.jar`.
 
 ## Usage
 
@@ -102,15 +101,15 @@ java -jar f1r3drive-<version>.jar <mount-point> \
   [--debug]
 ```
 
-**Quick start example** (connecting to the local multi-validator shard):
+**Quick start example** (connecting to the local shard started with shardctl):
 
-> ⚠️ The credentials below are **test-only** keys from `local-shard/README.md`. Do not use them on public shards.
+> ⚠️ The credentials below are **test-only** keys. Do not use them on public shards.
 
 ```bash
-java -jar build/libs/f1r3drive-0.1.1.jar ~/demo-f1r3drive \
+java -jar build/libs/f1r3drive-app.jar ~/demo-f1r3drive \
   --key-file ~/cipher.key \
-  --host localhost --port 40402 \
-  --observer-host localhost --observer-port 40403 \
+  --host localhost --port 40412 \
+  --observer-host localhost --observer-port 40452 \
   --address 111127RX5ZgiAdRaQy4AWy57RdvAAckdELReEBxzvWYVvdnR32PiHA \
   --private-key 357cdc4201a5650830e0bc5a03299a30038d9934ba4c7ab73ec164ad82471ff9
 ```
