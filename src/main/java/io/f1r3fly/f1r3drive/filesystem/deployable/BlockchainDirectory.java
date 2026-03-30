@@ -32,8 +32,10 @@ public class BlockchainDirectory extends AbstractDeployablePath implements Direc
             boolean sendToShard) {
         super(blockchainContext, name, parent);
         if (sendToShard) {
-            String rholang = RholangExpressionConstructor.sendDirectoryIntoNewChannel(getAbsolutePath(), Set.of(), getLastUpdated());
-            enqueueMutation(rholang);
+            byte[] key = getSigningKey();
+            String rholang = RholangExpressionConstructor.sendDirectoryIntoNewChannel(getAbsolutePath(), Set.of(),
+                    getLastUpdated() / 1000);
+            enqueueMutation(rholang, key);
         }
     }
 
@@ -65,13 +67,31 @@ public class BlockchainDirectory extends AbstractDeployablePath implements Direc
                     walletInfoFrom.signingKey(),
                     System.currentTimeMillis()));
         } else {
+            // Check if child with same name already exists
+            Path existing = findDirectChild(p.getName());
+            if (existing != null) {
+                // If existing is the same object, do nothing
+                if (existing == p) {
+                    return;
+                }
 
-            // force re-add
+                // If it's a different object but same name, we should probably keep the OLD one
+                // to preserve state (like isDirty=false), unless we explicitly want to replace
+                // it.
+                // But InMemoryFileSystem.createFile creates a NEW BlockchainFile wrapper.
+                // If we replace the old one with the new one, we lose the 'clean' state.
 
-            // First remove any existing child with the same name
-            boolean removed = children.removeIf(child -> child.getName().equals(p.getName()));
-            if (removed) {
-                logger.info("Removed existing child with name %s".formatted(p.getName()));
+                // However, the caller (InMemoryFileSystem.createFile) has already created 'p'
+                // (new BlockchainFile).
+                // If we discard 'p' and keep 'existing', we must ensure 'p' isn't used
+                // elsewhere.
+
+                logger.debug("Child {} already exists in {}, keeping existing instance to preserve state", p.getName(),
+                        getName());
+                // We do NOT add the new one. We keep the old one.
+                // But we might need to update the old one's content if 'p' has new content?
+                // In this context (createFile), 'p' is empty/new.
+                return;
             }
 
             // Then add the new child
@@ -85,6 +105,7 @@ public class BlockchainDirectory extends AbstractDeployablePath implements Direc
     }
 
     private void enqueueUpdatingChildrenList() {
+        byte[] key = getSigningKey();
         Set<String> newChildren = children.stream()
                 .filter((x) -> x instanceof AbstractDeployablePath)
                 .map(Path::getName)
@@ -92,9 +113,9 @@ public class BlockchainDirectory extends AbstractDeployablePath implements Direc
         String rholang = RholangExpressionConstructor.updateChildren(
                 getAbsolutePath(),
                 newChildren,
-                getLastUpdated());
+                getLastUpdated() / 1000);
 
-        enqueueMutation(rholang);
+        enqueueMutation(rholang, key);
     }
 
     @Override

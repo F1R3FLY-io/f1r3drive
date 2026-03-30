@@ -79,3 +79,13 @@ logs/
 tmp/
 temp/
 local-shard/data/
+
+# Phase 3 Archive - Documentation and demo files
+docs/phase3-archive/
+
+# Phase implementation summaries
+PHASE6_IMPLEMENTATION_SUMMARY.md
+
+
+# Surgical Grade: Private Evolution Roadmap
+docs/BLOCKCHAIN_PROTOCOL_EVOLUTION.md

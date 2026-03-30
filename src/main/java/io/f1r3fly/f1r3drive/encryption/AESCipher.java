@@ -1,6 +1,6 @@
 package io.f1r3fly.f1r3drive.encryption;
 
-import io.f1r3fly.f1r3drive.fuse.FuseException;
+import io.f1r3fly.f1r3drive.errors.F1r3DriveError;
 
 import javax.crypto.*;
 import javax.crypto.spec.SecretKeySpec;
@@ -21,31 +21,31 @@ public class AESCipher {
 
     private static AESCipher instance;
 
-    private AESCipher(String keyToPath) throws FuseException {
+    private AESCipher(String keyToPath) throws F1r3DriveError {
         try {
             this.cipher = Cipher.getInstance(CIPHER_NAME);
             this.keySpec = readOrGenerateKey(keyToPath);
             this.cipher.init(Cipher.ENCRYPT_MODE, keySpec);
         } catch (NoSuchAlgorithmException | NoSuchPaddingException | IOException | InvalidKeyException e) {
-            throw new FuseException("Failed to initialize AES cipher", e);
+            throw new F1r3DriveError("Failed to initialize AES cipher", e);
         }
     }
 
-    public byte[] encrypt(byte[] data) throws FuseException {
+    public byte[] encrypt(byte[] data) throws F1r3DriveError {
         try {
             cipher.init(Cipher.ENCRYPT_MODE, keySpec);
             return cipher.doFinal(data);
         } catch (InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
-            throw new FuseException("Failed to encrypt data", e);
+            throw new F1r3DriveError("Failed to encrypt data", e);
         }
     }
 
-    public byte[] decrypt(byte[] data) throws FuseException {
+    public byte[] decrypt(byte[] data) throws F1r3DriveError {
         try {
             cipher.init(Cipher.DECRYPT_MODE, keySpec);
             return cipher.doFinal(data);
         } catch (InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
-            throw new FuseException("Failed to decrypt data", e);
+            throw new F1r3DriveError("Failed to decrypt data", e);
         }
     }
 

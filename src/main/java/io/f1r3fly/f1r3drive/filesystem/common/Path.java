@@ -2,15 +2,15 @@ package io.f1r3fly.f1r3drive.filesystem.common;
 
 import io.f1r3fly.f1r3drive.blockchain.BlockchainContext;
 import io.f1r3fly.f1r3drive.errors.OperationNotPermitted;
-import io.f1r3fly.f1r3drive.fuse.struct.FileStat;
-import io.f1r3fly.f1r3drive.fuse.struct.FuseContext;
+import io.f1r3fly.f1r3drive.filesystem.bridge.FSFileStat;
+import io.f1r3fly.f1r3drive.filesystem.bridge.FSContext;
 import io.f1r3fly.f1r3drive.filesystem.utils.PathUtils;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 
 public interface Path {
-    void getAttr(FileStat stat, FuseContext fuseContext);
+    void getAttr(FSFileStat stat, FSContext context);
 
     // Helper method to get path separator
     default String separator() {
@@ -39,6 +39,8 @@ public interface Path {
     @NotNull String getAbsolutePath();
 
     @NotNull Long getLastUpdated();
+
+    byte[] getSigningKey();
 
     @Nullable
     Directory getParent();
