@@ -36,7 +36,7 @@ public class F1r3DriveAssertions extends F1R3DriveTestFixture {
                 .collect(Collectors.toSet());
         }
 
-        assertEquals(expectedChilds.length, children.size(), "Should be only %d file(s) in %s".formatted(expectedChilds.length, dir.getAbsolutePath()));
+        assertEquals(expectedChilds.length, children.size(), "Should be only %d file(s) in %s. Found: %s".formatted(expectedChilds.length, dir.getAbsolutePath(), children));
 
         for (File expectedChild : expectedChilds) {
             String expectedChildName = expectedChild.getName();
@@ -359,4 +359,37 @@ public class F1r3DriveAssertions extends F1R3DriveTestFixture {
         }
         return beforeTime;
     }
-} 
+
+    /**
+     * Polls the assertContainChildsAtShard method, retrying upon failure until a given timeout.
+     * This is useful to mitigate flakiness where blockchain state hasn't completely updated yet.
+     *
+     * @param timeoutMs Maximum amount of time to wait in milliseconds
+     * @param dir Directory to check
+     * @param expectedChilds Expected child files/directories
+     */
+    public static void pollAssertContainChildsAtShard(long timeoutMs, File dir, File... expectedChilds) {
+        long startTime = System.currentTimeMillis();
+        long waitTime = 500;
+        int attempts = 0;
+        while (true) {
+            attempts++;
+            try {
+                assertContainChildsAtShard(dir, expectedChilds);
+                return; // success
+            } catch (AssertionError | RuntimeException t) {
+                if (System.currentTimeMillis() - startTime > timeoutMs) {
+                    throw new RuntimeException("Assertion timeout after " + timeoutMs + "ms and " + attempts + " attempts waiting for directory contents: " + t.getMessage(), t);
+                }
+                log.info("Polling assertion failed at attempt {}, retrying in {} ms: {}", attempts, waitTime, t.getMessage());
+                try {
+                    Thread.sleep(waitTime);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Interrupted while polling", e);
+                }
+                waitTime = Math.min(waitTime * 2, 5000);
+            }
+        }
+    }
+}
