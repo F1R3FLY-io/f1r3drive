@@ -63,6 +63,14 @@ This document tracks every feature supported by `f1r3drive`, grouped by implemen
 | **Timestamp persistence** | Timestamps survive unmount → remount cycle | `shouldTrackLastModifiedDatesForFilesAndDirectories` |
 | **Data persistence** | File content survives unmount → remount cycle | `shouldCreateRenameGetDeleteFiles` |
 
+### Multi-Client Synchronization
+
+| Feature | Description |
+|---------|-------------|
+| **Live P2P Subscriptions** | F1r3Drive instances directly register their listener IPs via blockchain map to pull data changes asynchronously. |
+| **Dynamic Update Notifications** | Modifying a file locally instantly pushes a `grpcTell` notification to alert all peer mounts of the new active content. |
+| **Automated Data Fetches** | Upon receiving a push payload, the client natively pulls and hydrates updated generic files into its local cache structure. |
+
 ### Platform Integration (macOS)
 
 | Feature | Description |
@@ -75,7 +83,7 @@ This document tracks every feature supported by `f1r3drive`, grouped by implemen
 
 ## 🔌 Extension Features (Requires [F1R3Drive Finder Extension](https://github.com/F1R3FLY-io/f1r3drive-extension))
 
-These features require installing the optional macOS Finder Extension. They communicate with `f1r3drive` over a local gRPC server on `localhost:54000`.
+These features require installing the optional macOS Finder Extension. They communicate with `f1r3drive` over an internal local gRPC server (default port `54000`, configurable via `--finder-sync-port`).
 
 | Feature | Description |
 |---------|-------------|

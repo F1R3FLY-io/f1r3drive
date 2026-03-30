@@ -45,3 +45,82 @@ Based on the `RholangExpressionConstructor` implementation, the Rholang storage 
   // Example Chunk payload (from sendFileContentChunk):
   @"channel"!("base16EncodedChunk".hexToBytes())
   ```
+
+## Synchronization Mechanism
+
+Based on the patterns and structures defined in `RholangExpressionConstructor` and `NotificationConstructor`, the synchronization engine relies on a P2P publish-subscribe model utilizing Rholang's system processes (`grpcTell`).
+
+### Synchronization Components
+
+The synchronization mechanism relies on five discrete Rholang code structures to manage subscriptions, loop notifications, and dispatch gRPC triggers:
+
+#### 1. First Client Subscription (Registry Initialization)
+When the first client connects, the client registry Map is natively created on the channel:
+```rholang
+@"@/mountID/clients"!({
+  "client1:51111": { "host": "client1", "port": 51111 }
+})
+```
+
+#### 2. Appending Subscriptions
+For all subsequent clients, the node consumes the existing Map, appends its connection identifiers into the Map via `set`, and republishes it back to the channel:
+```rholang
+for ( @clients <- @"@/mountID/clients" ) {
+  @"@/mountID/clients"!( clients.set("client2:51112", { "host": "client2", "port": 51112 }) )
+}
+```
+
+#### 3. Removing Subscriptions
+When a client goes offline or unmounts the file system, the node consumes the active registry Map, strips its identifier out using `delete`, and republishes it:
+```rholang
+for ( @clients <- @"@/mountID/clients" ) {
+  @"@/mountID/clients"!( clients.delete("client2:51112") )
+}
+```
+
+#### 4. Emitting Update Events
+When a generic file operation occurs locally (e.g. Write, Create, Delete), a payload containing the update configuration (`Reason;Path`) is emitted to the node's local updates channel:
+```rholang
+@"@/mountID/updates"!("/mountID/subdir")
+```
+
+#### 5. Broadcasting the gRPC Notification Loop
+An active loop contract consumes any emitted updates alongside the current active generic subscriber list. It parses the Map into a List and performs recursive pattern matching `[head ...tail]` to iterate over all active peers and signal them locally via the `rho:io:grpcTell` system process:
+```rholang
+new grpcTell(`rho:io:grpcTell`) in {
+  contract loop(@clientsList, @updatedPath) = {
+    match clientsList {
+      [] => Nil
+      [head ...tail] => {
+        grpcTell!(
+          head.nth(1).get("host"),
+          head.nth(1).get("port"),
+          updatedPath
+        ) | loop!(tail)
+      }
+    }
+  } |
+  for (@updatedPath <= @"@/mountID/updates"; @clients <= @"@/mountID/clients") {
+    loop!(clients.toList(), updatedPath)
+  }
+}
+```
+
+### Rholang Synchronization Structures
+
+* **Client Registry Map (`clients`):**
+  Active clients subscribe to filesystem updates by joining a registry kept on the `@"/mountID/clients"` channel. 
+  The data structure used is a **Rholang Map**, where the key is a unique client identifier (`"host:port"`) and the value contains the target gRPC connection details (`{"host": "...", "port": 1234}`).
+  * **Subscribe:** Consumes the map, appends the new node via `clients.set(...)`, and writes it back.
+  * **Unsubscribe:** Consumes the map, removes the node via `clients.delete(...)`, and writes it back.
+  
+* **Event Loop & `grpcTell`:**
+  When a local client modifies a file, it deploys a notification trigger. This deploys a temporary recursive `contract loop(@clientsList, @updatedPath)` that:
+  1. Consumes the listener map.
+  2. Converts the map to a list (`clients.toList()`).
+  3. Iterates through the list using pattern matching (`[head ...tail] =>`).
+  4. Dispatches an external network call to each peer using the built-in system process `grpcTell`.
+
+* **Notification Payload (`updates`):**
+  The `@updatedPath` event payload dispatched to peers is a serialized, delimited string constructed by `NotificationConstructor.NotificationPayload`. It generally populates the `@"/mountID/updates"` channel. It follows the format `Reason;[OldPath];[NewPath]` (e.g., `"W;/mountID/file.txt"` for a write event).
+

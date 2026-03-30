@@ -40,9 +40,16 @@ public class F1r3DriveFuse extends FuseStubFS {
     private F1r3flyBlockchainClient f1R3FlyBlockchainClient;
     private FinderSyncExtensionServiceServer finderSyncExtensionServiceServer;
 
-    public F1r3DriveFuse(F1r3flyBlockchainClient f1R3FlyBlockchainClient) {
+    private String clientHost;
+    private int clientPort;
+    private int finderSyncPort;
+
+    public F1r3DriveFuse(F1r3flyBlockchainClient f1R3FlyBlockchainClient, String clientHost, int clientPort, int finderSyncPort) {
         super(); // no need to call Fuse constructor?
         this.f1R3FlyBlockchainClient = f1R3FlyBlockchainClient; // doesnt have a state, so can be reused between mounts
+        this.clientHost = clientHost;
+        this.clientPort = clientPort;
+        this.finderSyncPort = finderSyncPort;
     }
 
     /**
@@ -339,12 +346,12 @@ public class F1r3DriveFuse extends FuseStubFS {
             LOGGER.debug("Mount point verified: {}", mountPoint);
             
             LOGGER.debug("Creating InMemoryFileSystem...");
-            this.fileSystem = new InMemoryFileSystem(f1R3FlyBlockchainClient);
+            this.fileSystem = new InMemoryFileSystem(f1R3FlyBlockchainClient, mountPoint.getFileName().toString(), clientHost, clientPort);
             LOGGER.debug("Created InMemoryFileSystem successfully");
 
             LOGGER.debug("Creating FinderSyncExtensionServiceServer...");
             this.finderSyncExtensionServiceServer = new FinderSyncExtensionServiceServer(
-                this::handleChange, this::handleUnlockRevDirectory, 54000);
+                this::handleChange, this::handleUnlockRevDirectory, this.finderSyncPort);
             LOGGER.debug("Created FinderSyncExtensionServiceServer successfully");
 
             LOGGER.debug("Waiting for background operations to complete...");

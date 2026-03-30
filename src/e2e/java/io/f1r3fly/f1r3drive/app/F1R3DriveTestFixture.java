@@ -34,6 +34,8 @@ public class F1R3DriveTestFixture {
     protected static final int GRPC_PORT = 40402;
     protected static final int PROTOCOL_PORT = 40400;
     protected static final int DISCOVERY_PORT = 40404;
+    protected static final int FINDER_SYNC_PORT = 54000;
+    protected static final int CLIENT_SYNC_PORT = 50051;
     protected static final String MAX_BLOCK_LIMIT = "1000";
     protected static final Duration STARTUP_TIMEOUT = Duration.ofMinutes(2);
     protected static final String validatorPrivateKey = "5f668a7ee96d944a4494cc947e4005e172d7ab3461ee5538f1f2a45a835e9657"; // Bootstrap
@@ -205,7 +207,7 @@ public class F1R3DriveTestFixture {
         // Poll for the Observer node to finish processing the Genesis Block
         waitForGenesisBlock(120_000);
 
-        f1r3DriveFuse = new F1r3DriveFuse(f1R3FlyBlockchainClient);
+        f1r3DriveFuse = new F1r3DriveFuse(f1R3FlyBlockchainClient, "localhost", CLIENT_SYNC_PORT, FINDER_SYNC_PORT);
 
         forceUmountAndCleanup(); // cleanup before mount
 
@@ -442,14 +444,14 @@ public class F1R3DriveTestFixture {
 
     protected static void simulateUnlockWalletDirectoryAction(String revAddress, String privateKey)
         throws FinderSyncExtensionServiceClient.WalletUnlockException {
-        try (FinderSyncExtensionServiceClient client = new FinderSyncExtensionServiceClient("localhost", 54000)) {
+        try (FinderSyncExtensionServiceClient client = new FinderSyncExtensionServiceClient("localhost", FINDER_SYNC_PORT)) {
             client.unlockWalletDirectory(revAddress, privateKey);
         }
     }
 
     protected static void simulateChangeTokenAction(String tokenPath)
         throws FinderSyncExtensionServiceClient.ActionSubmissionException {
-        try (FinderSyncExtensionServiceClient client = new FinderSyncExtensionServiceClient("localhost", 54000)) {
+        try (FinderSyncExtensionServiceClient client = new FinderSyncExtensionServiceClient("localhost", FINDER_SYNC_PORT)) {
             client.submitAction(FinderSyncExtensionServiceOuterClass.MenuActionType.CHANGE, tokenPath);
         }
     }

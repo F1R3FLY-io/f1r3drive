@@ -105,6 +105,18 @@ public class BlockchainDirectory extends AbstractDeployablePath implements Direc
         enqueueUpdatingChildrenList();
     }
 
+    public synchronized void addSyncChild(Path child) {
+        // remove any existing child with the same name before adding
+        children.removeIf(c -> c.getName().equals(child.getName()));
+        children.add(child);
+        this.refreshLastUpdated();
+    }
+
+    public synchronized void deleteSyncChild(Path child) {
+        children.remove(child);
+        this.refreshLastUpdated();
+    }
+
     @Override
     public synchronized void mkdir(String lastComponent) throws OperationNotPermitted {
         BlockchainDirectory newDir = new BlockchainDirectory(getBlockchainContext(), lastComponent, this, true);

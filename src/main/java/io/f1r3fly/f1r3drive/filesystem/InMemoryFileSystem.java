@@ -30,6 +30,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import io.f1r3fly.f1r3drive.blockchain.client.grcp.listener.F1r3flyDriveServer;
+import io.f1r3fly.f1r3drive.blockchain.client.grcp.listener.UpdateNotificationHandler;
+import io.f1r3fly.f1r3drive.blockchain.client.background.NotificationsSubscriber;
+import io.f1r3fly.f1r3drive.blockchain.client.grcp.listener.NotificationConstructor;
+import io.f1r3fly.f1r3drive.filesystem.local.BlockchainShardFetcher;
+import casper.v1.ExternalCommunicationServiceV1;
+import casper.ExternalCommunicationServiceCommon;
+import io.f1r3fly.f1r3drive.filesystem.deployable.BlockchainDirectory;
+
 public class InMemoryFileSystem implements FileSystem {
 
     private static final Logger logger = LoggerFactory.getLogger(InMemoryFileSystem.class);
@@ -40,8 +49,16 @@ public class InMemoryFileSystem implements FileSystem {
     private final DeployDispatcher deployDispatcher;
 
     private final StateChangeEventsManager stateChangeEventsManager;
+    private final String mountName;
+    private final String clientHost;
+    private final int clientPort;
+    private F1r3flyDriveServer grpcServer;
+    private String[] firstUnlockedWallet = null;
 
-    public InMemoryFileSystem(F1r3flyBlockchainClient f1R3FlyBlockchainClient) throws F1r3DriveError {
+    public InMemoryFileSystem(F1r3flyBlockchainClient f1R3FlyBlockchainClient, String mountName, String clientHost, int clientPort) throws F1r3DriveError {
+        this.mountName = mountName;
+        this.clientHost = clientHost;
+        this.clientPort = clientPort;
 
         this.stateChangeEventsManager = new StateChangeEventsManager();
         this.stateChangeEventsManager.start();
@@ -59,11 +76,118 @@ public class InMemoryFileSystem implements FileSystem {
             }
         }
 
+        try {
+            startGRPCServer(f1R3FlyBlockchainClient);
+        } catch (Exception e) {
+            logger.error("Failed to start gRPC server", e);
+        }
+
     }
+
+    private void startGRPCServer(F1r3flyBlockchainClient f1R3FlyBlockchainClient) throws IOException, InterruptedException {
+        UpdateNotificationHandler updateNotificationHandler = new UpdateNotificationHandler() {
+            private String prependMountName(String path) {
+                return "/" + mountName + path; // assuming root path uses mountName or directly revAddresses
+            }
+
+            @Override
+            public ExternalCommunicationServiceV1.UpdateNotificationResponse handle(ExternalCommunicationServiceCommon.UpdateNotification notification) {
+                if (rootDirectory != null) {
+                    logger.info("sync: Received notification to {}:{} about {}", notification.getClientHost(), notification.getClientPort(), notification.getPayload());
+
+                    NotificationConstructor.NotificationPayload reason = NotificationConstructor.NotificationPayload.parseNotification(notification.getPayload());
+
+                    try {
+                        Path p = findPath(reason.path());
+                        Directory parentRaw = getParentDirectory(reason.path());
+                        BlockchainDirectory parent = null;
+
+                        if (parentRaw instanceof BlockchainDirectory bd) {
+                            parent = bd;
+                        }
+
+                        switch (reason.reason()) {
+                            case NotificationConstructor.NotificationReasons.FILE_CREATED:
+                            case NotificationConstructor.NotificationReasons.DIRECTORY_CREATED:
+                                if (parent == null) {
+                                    logger.warn("sync: Directory created but the parent is null or not a BlockchainDirectory. Path: {}", reason.path());
+                                    return ExternalCommunicationServiceV1.UpdateNotificationResponse.newBuilder().build();
+                                }
+                                if (p != null && parent != null) {
+                                    parent.deleteSyncChild(p);
+                                }
+
+                                try {
+                                    String absPath = PathUtils.getPathDelimiterBasedOnOS() + getAddressFromPath(reason.path()) + reason.path();
+                                    Path newChild = BlockchainShardFetcher.fetchDirectoryFromShard(f1R3FlyBlockchainClient, parent.getBlockchainContext(), absPath, PathUtils.getFileName(reason.path()), parent);
+                                    parent.addSyncChild(newChild);
+                                    logger.info("sync: Created {}", reason.path());
+                                } catch (F1r3DriveError e) {
+                                    logger.error("sync: Error fetching file {} from shard", reason.path(), e);
+                                }
+                                break;
+                            case NotificationConstructor.NotificationReasons.TRUNCATED:
+                                // To implement truncation if MemoryFile replacement gets ported to dev
+                                break;
+                            case NotificationConstructor.NotificationReasons.RENAMED:
+                                // To implement renaming if MemoryFile replacement gets ported to dev
+                                break;
+                            case NotificationConstructor.NotificationReasons.FILE_WROTE:
+                                if (parent == null) {
+                                    logger.warn("sync: File wrote but parent is not BlockchainDirectory");
+                                    return ExternalCommunicationServiceV1.UpdateNotificationResponse.newBuilder().build();
+                                }
+                                try {
+                                    if (p != null) {
+                                        parent.deleteSyncChild(p);
+                                    }
+                                    String absPath = PathUtils.getPathDelimiterBasedOnOS() + getAddressFromPath(reason.path()) + reason.path();
+                                    Path newChild = BlockchainShardFetcher.fetchDirectoryFromShard(f1R3FlyBlockchainClient, parent.getBlockchainContext(), absPath, PathUtils.getFileName(reason.path()), parent);
+                                    parent.addSyncChild(newChild);
+                                    logger.info("sync: Updated content for file {}", reason.path());
+                                } catch (Exception e) {
+                                    logger.error("sync: Error fetching content for file {}", reason.path(), e);
+                                }
+                                break;
+                            case NotificationConstructor.NotificationReasons.DELETED:
+                                if (p != null && parent != null) {
+                                    parent.deleteSyncChild(p);
+                                    logger.info("sync: Deleted {}", reason.path());
+                                }
+                                break;
+                            default:
+                                logger.warn("sync: Unknown reason {}", reason.reason());
+                        }
+
+                    } catch (Exception e) {
+                        logger.error("sync: Error handling notification", e);
+                    }
+                }
+                return ExternalCommunicationServiceV1.UpdateNotificationResponse.newBuilder().build();
+            }
+        };
+
+        this.grpcServer = F1r3flyDriveServer.create(clientPort, updateNotificationHandler);
+        this.grpcServer.start();
+    }
+
+
 
     // Helper method to get path separator
     private String pathSeparator() {
         return PathUtils.getPathDelimiterBasedOnOS();
+    }
+
+    private String getAddressFromPath(String path) {
+        if (path == null || path.isEmpty()) return "";
+        String[] parts = path.split(PathUtils.getPathDelimiterBasedOnOS());
+        // For /1111.../folder we get [, 1111..., folder]
+        if (path.startsWith(PathUtils.getPathDelimiterBasedOnOS()) && parts.length > 1) {
+            return parts[1];
+        } else if (parts.length > 0) {
+            return parts[0];
+        }
+        return path;
     }
 
     // Simplified path manipulation methods
@@ -363,6 +487,13 @@ public class InMemoryFileSystem implements FileSystem {
                 this.rootDirectory.deleteChild(lockedRoot);
                 this.rootDirectory.addChild(unlockedRoot);
 
+                // Subscribe to notifications using the first unlocked wallet
+                if (firstUnlockedWallet == null) {
+                    firstUnlockedWallet = new String[] { revAddress, privateKey };
+                    byte[] signingKey = fr.acinq.secp256k1.Hex.decode(privateKey);
+                    NotificationsSubscriber.subscribe(deployDispatcher.getBlockchainClient(), deployDispatcher, clientHost, clientPort, mountName, revAddress, signingKey);
+                }
+
                 TokenDirectory tokenDirectory = unlockedRoot.getTokenDirectory();
                 if (tokenDirectory != null) {
                     stateChangeEventsManager.registerEventProcessor(StateChangeEvents.WalletBalanceChanged.class,
@@ -445,6 +576,18 @@ public class InMemoryFileSystem implements FileSystem {
             logger.info("Destroyed deploy dispatcher");
         } catch (Throwable e) {
             logger.warn("Error destroying deploy dispatcher during termination", e);
+        }
+
+        try {
+            if (firstUnlockedWallet != null) {
+                byte[] signingKey = fr.acinq.secp256k1.Hex.decode(firstUnlockedWallet[1]);
+                NotificationsSubscriber.unsubscribe(deployDispatcher, clientHost, clientPort, mountName, firstUnlockedWallet[0], signingKey);
+            }
+            if (this.grpcServer != null) {
+                this.grpcServer.shutdownGracefully();
+            }
+        } catch (Throwable e) {
+            logger.warn("Error stopping gRPC server and subscriber", e);
         }
 
         try {
