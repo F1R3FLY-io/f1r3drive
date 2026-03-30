@@ -55,6 +55,22 @@ class F1r3DriveCli implements Callable<Integer> {
         description = "Port of the F1r3fly observer gRPC API (default: ${DEFAULT-VALUE}).")
     private int observerPort = 40403;
 
+    // --- Client Sync ---
+
+    @Option(names = {"--client-host"},
+        description = "Host for P2P client sync (default: ${DEFAULT-VALUE}).")
+    private String clientHost = "localhost";
+
+    @Option(names = {"--client-port"},
+        description = "Port for P2P client sync (default: ${DEFAULT-VALUE}).")
+    private int clientPort = 50051;
+
+    // --- Finder Sync ---
+
+    @Option(names = {"--finder-sync-port"},
+        description = "Port for Finder sync internal extension (default: ${DEFAULT-VALUE}).")
+    private int finderSyncPort = 54000;
+
     // --- Security ---
 
     @Option(names = {"-k", "--key-file"}, required = true,
@@ -112,7 +128,7 @@ class F1r3DriveCli implements Callable<Integer> {
         );
 
         f1r3DriveFuse = new F1r3DriveFuse(
-            f1R3FlyBlockchainClient
+            f1R3FlyBlockchainClient, clientHost, clientPort, finderSyncPort
         );
 
         // Add shutdown hook to ensure proper unmounting on Ctrl+C or kill

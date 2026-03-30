@@ -432,4 +432,138 @@ public class RholangExpressionConstructor {
         
         return buildChannelDataFromKeyValues(keyValues);
     }
+    
+    // SUBSCRIPTIONS ON UPDATES
+
+    public static String appendSubscription(String clientHost, int clientPort, String mountId) {
+        // output looks like:
+        /*
+            for ( @clients <- @"@/mountID/clients") {
+                @"@/mountID/clients"!( clients.set( "clientHost:clientPort", { "host": "clientHost", "port": clientPort } ).set( "lastUpdated", 123 ) )
+            }
+         */
+
+        return new StringBuilder()
+            .append("for ( @clients <- @\"@/")
+            .append(mountId)
+            .append("/clients\") { @\"@/")
+            .append(mountId)
+            .append("/clients\"!( clients.set( \"")
+            .append(clientHost)
+            .append(":")
+            .append(clientPort)
+            .append("\", { \"host\": \"")
+            .append(clientHost)
+            .append("\", \"port\": ")
+            .append(clientPort)
+            .append("} ).set( \"")
+            .append(LAST_UPDATED)
+            .append("\", ")
+            .append(System.currentTimeMillis())
+            .append(") ) }")
+            .toString();
+    }
+
+    public static String createFirstSubscription(String clientHost, int clientPort, String mountId) {
+        // output looks like:
+        /*
+            @"@/mountID/clients"!({
+                "clientHost:clientPort": { "host": "clientHost", "port": clientPort }
+            }) | @1(1234)
+        */
+
+        return new StringBuilder()
+            .append("@\"@/")
+            .append(mountId)
+            .append("/clients\"!({ \"")
+            .append(clientHost)
+            .append(":")
+            .append(clientPort)
+            .append("\": { \"host\": \"")
+            .append(clientHost)
+            .append("\", \"port\": ")
+            .append(clientPort)
+            .append("}}) | @1!(")
+            .append(System.currentTimeMillis())
+            .append(")")
+            .toString();
+    }
+
+    public static String removeSubscription(String clientHost, int clientPort, String mountId) {
+        // output looks like:
+        /*
+            for ( @clients <- @"@/mountID/clients") {
+                @"@/mountID/clients"!( clients.delete("clientHost:clientPort") )
+            } | @!1(1234)
+         */
+
+        return new StringBuilder()
+            .append("for ( @clients <- @\"@/")
+            .append(mountId)
+            .append("/clients\") { @\"@/")
+            .append(mountId)
+            .append("/clients\"!( clients.delete(\"")
+            .append(clientHost)
+            .append(":")
+            .append(clientPort)
+            .append("\"))} | @1!(")
+            .append(System.currentTimeMillis())
+            .append(")")
+            .toString();
+    }
+
+    public static String triggerNotificationForSubscribers(String mountId, io.f1r3fly.f1r3drive.blockchain.client.grcp.listener.NotificationConstructor.NotificationPayload payload, String currentHost, int currentPort) {
+        // output looks like:
+        /*
+            new loop, grpcTell(`rho:io:grpcTell`) in {
+
+                contract loop(@clientsList, @updatedPath) = {
+                    match clientsList {
+                      [] => Nil
+                      [head ...tail] => {
+                        grpcTell!(
+                                head.nth(1).get("host"),
+                                head.nth(1).get("port"),
+                                updatedPath ) | loop!(tail)
+                      }
+                    }
+                } |
+
+                for (@clients <- @"@/mountID/clients") {
+                    loop!(clients.delete("clientHost:clientPort").toList(), "updatedFolder") |
+                    @"@/mountID/clients"!(clients)
+                }
+            } | @1!(1234)
+         */
+
+        return new StringBuilder()
+            .append("new loop, grpcTell(`rho:io:grpcTell`) in {")
+            .append("contract loop(@clientsList, @updatedPath) = {")
+            .append("match clientsList {")
+            .append("[] => Nil")
+            .append("[head ...tail] => {")
+            .append("grpcTell!(")
+            .append("head.nth(1).get(\"host\"),")
+            .append("head.nth(1).get(\"port\"),")
+            .append("updatedPath ) | loop!(tail)")
+            .append("}")
+            .append("}")
+            .append("} |")
+            .append("for (@clients <- @\"@/")
+            .append(mountId)
+            .append("/clients\") {")
+            .append("loop!(clients.delete(\"")
+            .append(currentHost)
+            .append(":")
+            .append(currentPort)
+            .append("\").toList(), \"")
+            .append(payload.makeString())
+            .append("\")")
+            .append("| @\"@/")
+            .append(mountId)
+            .append("/clients\"!(clients)}} | @1!(")
+            .append(System.currentTimeMillis())
+            .append(")")
+            .toString();
+    }
 }

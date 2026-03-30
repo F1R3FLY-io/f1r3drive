@@ -44,6 +44,23 @@ F1r3fly nodes expose two gRPC APIs:
 --observer-host node.example.com --observer-port 40403
 ```
 
+### Peer-to-Peer Synchronization
+
+These options define how the local F1r3Drive client listens for and synchronizes remote background changes via gRPC system processes (`rho:io:grpcTell`) broadcast by the blockchain.
+
+| Short | Long | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| — | `--client-host` | No | `localhost` | Host address advertised to the blockchain network for peer-to-peer event push notifications. |
+| — | `--client-port` | No | `50051` | Port allocated for binding the background synchronization listener. |
+
+### Finder Extension
+
+These options configure the communication gateway for the [macOS Finder Sync Extension](https://github.com/F1R3FLY-io/f1r3drive-extension).
+
+| Short | Long | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| — | `--finder-sync-port` | No | `54000` | Port for the internal gRPC listener servicing macOS Finder context menu actions and directory unlocks. |
+
 ### Encryption
 
 | Short | Long | Required | Default | Description |

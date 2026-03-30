@@ -213,6 +213,8 @@ public class F1r3flyBlockchainClient {
             return deployResponse.getResult().getPostBlockData(0).getExprs(0);
             
             
+        } catch (F1r3DriveError e) {
+            throw e;
         } catch (Exception e) {
             LOGGER.warn("failed to deploy exploratory code", e);
             throw new F1r3DriveError("Error deploying exploratory code", e);
