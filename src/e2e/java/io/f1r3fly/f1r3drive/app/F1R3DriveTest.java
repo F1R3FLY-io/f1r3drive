@@ -13,6 +13,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Random;
@@ -631,5 +632,119 @@ class F1R3DriveTest extends F1R3DriveTestFixture {
         assertLastModifiedTimeApproximatelyLocally(anotherFile, anotherFileTimeBeforeRemount,
             "Persistence validation for additional file after filesystem remount operation");
 
+    }
+
+    @Test
+    @DisplayName("Should sync files between 2 clients (manual propose)")
+    void shouldSyncFileBetween2Clients() throws IOException, InterruptedException {
+        mountF1r3Drive(true);
+        assertUnlockWalletDirectory(REV_WALLET_1, PRIVATE_KEY_1);
+
+        File aFile = new File(UNLOCKED_WALLET_DIR_1, "aFile.txt");
+        String writtenData = "Hello, world!";
+        assertCreateNewFileLocally(aFile);
+        Files.writeString(aFile.toPath(), writtenData, StandardCharsets.UTF_8);
+
+        assertContainChildsLocally(UNLOCKED_WALLET_DIR_1, aFile);
+        assertContainChildsAtShard(UNLOCKED_WALLET_DIR_1, aFile);
+
+        File bFile = new File(UNLOCKED_WALLET_DIR_1, "bFile.txt");
+        assertCreateNewFileLocally(bFile);
+        String writeData2 = "Hello, world! 2";
+        Files.writeString(bFile.toPath(), writeData2, StandardCharsets.UTF_8);
+
+        waitOnBackgroundDeployments();
+        remount();
+        assertUnlockWalletDirectory(REV_WALLET_1, PRIVATE_KEY_1);
+
+        assertContainChildsLocally(UNLOCKED_WALLET_DIR_1, aFile, bFile);
+
+        String readData = Files.readString(aFile.toPath());
+        assertEquals(writtenData, readData, "Read data should be equal to written data");
+
+        String readData2 = Files.readString(bFile.toPath());
+        assertEquals(writeData2, readData2, "Read data should be equal to written data");
+
+        assertDeleteFileLocally(aFile);
+
+        waitOnBackgroundDeployments();
+        remount();
+        assertUnlockWalletDirectory(REV_WALLET_1, PRIVATE_KEY_1);
+
+        assertContainChildsLocally(UNLOCKED_WALLET_DIR_1, bFile);
+        assertFalse(aFile.exists(), "Deleted file should not exist after remount");
+
+        File renamedFile = new File(UNLOCKED_WALLET_DIR_1, "renamedFile.txt");
+        assertRenameFileLocally(bFile, renamedFile);
+
+        waitOnBackgroundDeployments();
+        remount();
+        assertUnlockWalletDirectory(REV_WALLET_1, PRIVATE_KEY_1);
+
+        assertContainChildsLocally(UNLOCKED_WALLET_DIR_1, renamedFile);
+        assertFalse(bFile.exists(), "Renamed original file should not exist after remount");
+    }
+
+    @Test
+    @DisplayName("Should sync folders between 2 clients (manual propose)")
+    void shouldSyncFoldersBetween2Clients() throws IOException, InterruptedException {
+        mountF1r3Drive(true);
+        assertUnlockWalletDirectory(REV_WALLET_1, PRIVATE_KEY_1);
+
+        File subDirA = new File(UNLOCKED_WALLET_DIR_1, "subDirA");
+        assertCreateNewDirectoryLocally(subDirA);
+
+        waitOnBackgroundDeployments();
+        remount();
+        assertUnlockWalletDirectory(REV_WALLET_1, PRIVATE_KEY_1);
+
+        assertContainChildsLocally(UNLOCKED_WALLET_DIR_1, subDirA);
+
+        File subDirB = new File(UNLOCKED_WALLET_DIR_1, "subDirB");
+        assertCreateNewDirectoryLocally(subDirB);
+        assertContainChildsLocally(UNLOCKED_WALLET_DIR_1, subDirA, subDirB);
+
+        waitOnBackgroundDeployments();
+        remount();
+        assertUnlockWalletDirectory(REV_WALLET_1, PRIVATE_KEY_1);
+
+        assertContainChildsLocally(UNLOCKED_WALLET_DIR_1, subDirA, subDirB);
+
+        assertDeleteDirectoryLocally(subDirA);
+        assertContainChildsLocally(UNLOCKED_WALLET_DIR_1, subDirB);
+
+        waitOnBackgroundDeployments();
+        remount();
+        assertUnlockWalletDirectory(REV_WALLET_1, PRIVATE_KEY_1);
+
+        assertContainChildsLocally(UNLOCKED_WALLET_DIR_1, subDirB);
+        assertFalse(subDirA.exists(), "Deleted directory should not exist after remount");
+
+        File nestedDirC = new File(subDirB, "nestedDirC1");
+
+        assertFalse(nestedDirC.exists(), "Nested directory should not exist");
+        
+        assertCreateNewDirectoryLocally(nestedDirC);
+
+        waitOnBackgroundDeployments();
+        remount();
+        assertUnlockWalletDirectory(REV_WALLET_1, PRIVATE_KEY_1);
+
+        assertContainChildsLocally(subDirB, nestedDirC);
+
+        File nestedDirD = new File(nestedDirC, "nestedDirD1");
+
+        assertFalse(nestedDirD.exists(), "Nested directory should not exist");
+
+        assertDirIsEmptyLocally(nestedDirC);
+
+        assertCreateNewDirectoryLocally(nestedDirD);
+
+        waitOnBackgroundDeployments();
+        remount();
+        assertUnlockWalletDirectory(REV_WALLET_1, PRIVATE_KEY_1);
+
+        assertContainChildsLocally(subDirB, nestedDirC); // not changed
+        assertContainChildsLocally(nestedDirC, nestedDirD); // contain a new nested directory
     }
 }
