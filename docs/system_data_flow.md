@@ -1,6 +1,6 @@
-# F1r3flyFS Flow Diagram
+# F1r3Drive Flow Diagram
 
-This diagram illustrates the high-level data flow within F1r3flyFS, detailing how file reads, writes, and background blockchain synchronizations are orchestrated.
+This diagram illustrates the high-level data flow within F1r3Drive, detailing how file reads, writes, and background blockchain synchronizations are orchestrated.
 
 ```mermaid
 sequenceDiagram
