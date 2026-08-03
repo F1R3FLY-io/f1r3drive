@@ -132,20 +132,25 @@ message HeaderProto {
 }
 
 /**
- * Note: deploys are uniquely keyed by `user`, `timestamp`.
+ * Single-signer client projection of f1r3node-rust DeployDataProto.
  *
- * **TODO**: details of signatures and payment. See RHOL-781
+ * Cost-accounted Rholang funds execution from each signature's token supply;
+ * the former per-deploy phlo price and limit are retired. Their field numbers
+ * and names remain reserved so a client cannot accidentally sign bytes that
+ * the node removes while canonicalizing a deploy.
  */
 message DeployDataProto {
+  reserved 7, 8, 15;
+  reserved "phloPrice", "phloLimit", "primary_phlo_share";
   bytes  deployer             = 1; //public key
   string term                 = 2; //rholang source code to deploy (will be parsed into `Par`)
   int64  timestamp            = 3; //millisecond timestamp
   bytes  sig                  = 4; //signature of (hash(term) + timestamp) using private key
   string sigAlgorithm         = 5; //name of the algorithm used to sign
-  int64 phloPrice             = 7; //phlo price
-  int64 phloLimit             = 8; //phlo limit for the deployment
   int64 validAfterBlockNumber = 10;
   string shardId              = 11;//shard ID to prevent replay of deploys between shards
+  string language             = 12;//language of the source code
+  int64 expirationTimestamp   = 13;//0 means no expiration
 }
 
 message ProcessedDeployProto {

@@ -1,149 +1,183 @@
 package io.f1r3fly.f1r3drive.blockchain.client;
 
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
+import io.f1r3fly.f1r3drive.background.state.StateChangeEvents;
+import io.f1r3fly.f1r3drive.background.state.StateChangeEventsManager;
+import java.util.Set;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.f1r3fly.f1r3drive.background.state.StateChangeEvents;
-import io.f1r3fly.f1r3drive.background.state.StateChangeEventsManager;
-
 public class DeployDispatcher {
 
-    private final Logger logger = LoggerFactory.getLogger(DeployDispatcher.class.getName());
-    private F1r3flyBlockchainClient f1R3FlyBlockchainClient;
+  private static final Logger LOGGER = LoggerFactory.getLogger(DeployDispatcher.class);
 
-    // Config
-    private final int MAX_EXPRESSION_LENGTH_IN_LOG = 1000;
-    private final int POLL_INTERVAL_MS = 5000;
-    private final int WAITING_STEP_MS = 5000;
-    private final int MAX_RETRIES = 10;
-    private final int RETRY_INTERVAL_MS = 15000;
+  private static final int MAX_EXPRESSION_LENGTH_IN_LOG = 1000;
+  private static final int MAX_RETRIES = 10;
+  private static final int RETRY_INTERVAL_MS = 15000;
 
-    // BACKGROUND:
-    private volatile boolean isDeploying = false;
-    private final AtomicReference<Throwable> lastDeployError = new AtomicReference<>();
-    private Thread backgroundThread;
-    private ExecutorService executorService;
-    private int retryCount = 0;
+  private final F1r3flyBlockchainClient f1R3FlyBlockchainClient;
+  private final AtomicInteger outstandingDeployments = new AtomicInteger();
+  private final AtomicReference<Throwable> lastDeployError = new AtomicReference<>();
+  private final Object completionMonitor = new Object();
+  private Thread backgroundThread;
 
-    private final ConcurrentLinkedQueue<Deployment> queue;
+  private final BlockingQueue<Deployment> queue;
 
-    public record Deployment(String rhoOrMettaExpression, boolean useBiggerPhloLimit, String language,
-            String revAddress, byte[] signingKey, long timestamp) {
-    }
+  public record Deployment(
+      String rhoOrMettaExpression,
+      String language,
+      Set<String> affectedRevAddresses,
+      byte[] signingKey,
+      long timestamp) {}
 
-    private final StateChangeEventsManager stateChangeEventsManager;
+  private final StateChangeEventsManager stateChangeEventsManager;
 
-    private class BackgroundDeployer extends Thread {
-        @Override
-        public void run() {
-            while (!isInterrupted()) {
-                Deployment deployment = queue.poll();
-                if (deployment != null) {
-                    doDeploy(deployment);
-                } else {
-                    try {
-                        Thread.sleep(POLL_INTERVAL_MS);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
+  private class BackgroundDeployer extends Thread {
+    @Override
+    public void run() {
+      try {
+        while (!isInterrupted()) {
+          Deployment deployment = queue.take();
+          if (!deployWithRetries(deployment)) {
+            return;
+          }
         }
-
-        private void doDeploy(Deployment deployment) {
-            try {
-                isDeploying = true;
-                f1R3FlyBlockchainClient.deploy(deployment.rhoOrMettaExpression, deployment.useBiggerPhloLimit,
-                        deployment.language, deployment.signingKey, deployment.timestamp);
-                stateChangeEventsManager.addEvent(new StateChangeEvents.WalletBalanceChanged(deployment.revAddress));
-                retryCount = 0;
-                isDeploying = false;
-            } catch (Throwable e) {
-                if (retryCount < MAX_RETRIES && !interrupted()) {
-                    retryCount++;
-                    logger.warn("Error during deployment. Retrying. Retry count: " + retryCount, e);
-                    try {
-                        Thread.sleep(RETRY_INTERVAL_MS);
-                    } catch (InterruptedException ex) {
-                        ex.printStackTrace();
-                    }
-                    doDeploy(deployment);
-                } else {
-                    logger.error("Error during deployment. Max retries reached. Stopping deployment.");
-                    isDeploying = false;
-                    retryCount = 0;
-                    lastDeployError.set(e);
-                }
-            }
+      } catch (InterruptedException error) {
+        interrupt();
+      } catch (Throwable error) {
+        recordDeploymentFailure(error);
+        if (error instanceof Error fatalError) {
+          throw fatalError;
         }
+      }
     }
 
-    public DeployDispatcher(F1r3flyBlockchainClient f1R3FlyBlockchainClient,
-            StateChangeEventsManager stateChangeEventsManager) {
-        this.f1R3FlyBlockchainClient = f1R3FlyBlockchainClient;
-        this.stateChangeEventsManager = stateChangeEventsManager;
-        queue = new ConcurrentLinkedQueue<>();
-        // single thread pool
-        this.executorService = java.util.concurrent.Executors.newSingleThreadExecutor();
-    }
-
-    public void enqueueDeploy(Deployment deployment) {
-        // dont trim if log level is not enabled
-        if (logger.isDebugEnabled()) {
-            String smaller = deployment.rhoOrMettaExpression.length() > MAX_EXPRESSION_LENGTH_IN_LOG
-                    ? deployment.rhoOrMettaExpression.substring(0, MAX_EXPRESSION_LENGTH_IN_LOG) + "..."
-                    : deployment.rhoOrMettaExpression;
-
-            logger.debug("Enqueueing deployment: {}", smaller);
+    private boolean deployWithRetries(Deployment deployment) {
+      for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          f1R3FlyBlockchainClient.deploy(
+              deployment.rhoOrMettaExpression,
+              deployment.language,
+              deployment.signingKey,
+              deployment.timestamp);
+          deployment.affectedRevAddresses.stream()
+              .map(StateChangeEvents.WalletBalanceChanged::new)
+              .forEach(stateChangeEventsManager::addEvent);
+          outstandingDeployments.decrementAndGet();
+          signalCompletionStateChanged();
+          return true;
+        } catch (RuntimeException error) {
+          if (attempt == MAX_RETRIES) {
+            recordDeploymentFailure(error);
+            return false;
+          }
+          LOGGER.warn("Deployment failed; retrying ({}/{})", attempt + 1, MAX_RETRIES, error);
+          try {
+            Thread.sleep(RETRY_INTERVAL_MS);
+          } catch (InterruptedException interrupted) {
+            interrupt();
+            recordDeploymentFailure(interrupted);
+            return false;
+          }
         }
+      }
+      throw new IllegalStateException("unreachable deployment retry state");
+    }
+  }
 
-        queue.add(deployment);
+  public DeployDispatcher(
+      F1r3flyBlockchainClient f1R3FlyBlockchainClient,
+      StateChangeEventsManager stateChangeEventsManager) {
+    this.f1R3FlyBlockchainClient = f1R3FlyBlockchainClient;
+    this.stateChangeEventsManager = stateChangeEventsManager;
+    queue = new LinkedBlockingQueue<>();
+  }
+
+  public void enqueueDeploy(Deployment deployment) {
+    Throwable deploymentError = lastDeployError.get();
+    if (deploymentError != null) {
+      throw new IllegalStateException("Deployment worker has failed", deploymentError);
     }
 
-    // dequeue in a separate thread: poll, deploy or wait if empty, repeat
-    public void startBackgroundDeploy() {
-        if (backgroundThread == null) {
-            backgroundThread = new BackgroundDeployer();
+    // Avoid allocating the abbreviated expression unless debug logging is enabled.
+    if (LOGGER.isDebugEnabled()) {
+      String smaller =
+          deployment.rhoOrMettaExpression.length() > MAX_EXPRESSION_LENGTH_IN_LOG
+              ? deployment.rhoOrMettaExpression.substring(0, MAX_EXPRESSION_LENGTH_IN_LOG) + "..."
+              : deployment.rhoOrMettaExpression;
 
-            executorService.submit(backgroundThread);
+      LOGGER.debug("Enqueueing deployment: {}", smaller);
+    }
+
+    outstandingDeployments.incrementAndGet();
+    queue.add(deployment);
+  }
+
+  // Consume queued deployments serially so their blockchain mutations remain ordered.
+  public synchronized void startBackgroundDeploy() {
+    if (backgroundThread != null) {
+      return;
+    }
+    backgroundThread = new BackgroundDeployer();
+    backgroundThread.setName("f1r3drive-deploy-dispatcher");
+    backgroundThread.start();
+  }
+
+  public void waitOnEmptyQueue() {
+    LOGGER.info(
+        "Waiting for deployments to complete. Outstanding deployments: "
+            + outstandingDeployments.get());
+    synchronized (completionMonitor) {
+      while (outstandingDeployments.get() > 0 && lastDeployError.get() == null) {
+        LOGGER.debug(
+            "Waiting for deployments to complete. Outstanding deployments: {}",
+            outstandingDeployments.get());
+        try {
+          completionMonitor.wait();
+        } catch (InterruptedException error) {
+          Thread.currentThread().interrupt();
+          throw new IllegalStateException("Interrupted while waiting for deployments", error);
         }
+      }
     }
 
-    public void waitOnEmptyQueue() {
-        logger.info(
-                "Waiting for the queue to be empty. Queue size: " + queue.size() + ". Is deploying: " + isDeploying);
-        while ((!queue.isEmpty() || isDeploying) && lastDeployError.get() == null) {
-            try {
-                logger.debug("Waiting for the queue to be empty. Queue size: " + queue.size() + ". Is deploying: "
-                        + isDeploying);
-                Thread.sleep(WAITING_STEP_MS);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-
-        if (lastDeployError.get() != null) {
-            throw new RuntimeException("Error during deployment", lastDeployError.get());
-        }
+    if (lastDeployError.get() != null) {
+      throw new RuntimeException("Error during deployment", lastDeployError.get());
     }
+  }
 
-    // hard stop
-    public void destroy() {
-        logger.info("Destroying DeployDispatcher");
-        queue.clear();
-        if (backgroundThread != null) {
-            backgroundThread.interrupt();
-            backgroundThread = null;
-        }
-        executorService.shutdown();
+  private void signalCompletionStateChanged() {
+    synchronized (completionMonitor) {
+      completionMonitor.notifyAll();
     }
+  }
 
-    public F1r3flyBlockchainClient getBlockchainClient() {
-        return f1R3FlyBlockchainClient;
+  private void recordDeploymentFailure(Throwable error) {
+    lastDeployError.compareAndSet(null, error);
+    LOGGER.error("Deployment worker stopped before all deployments completed", error);
+    signalCompletionStateChanged();
+  }
+
+  // hard stop
+  public synchronized void destroy() {
+    LOGGER.info("Destroying DeployDispatcher");
+    queue.clear();
+    if (backgroundThread != null) {
+      backgroundThread.interrupt();
+      try {
+        backgroundThread.join();
+      } catch (InterruptedException error) {
+        Thread.currentThread().interrupt();
+      } finally {
+        backgroundThread = null;
+      }
     }
+  }
 
+  public F1r3flyBlockchainClient getBlockchainClient() {
+    return f1R3FlyBlockchainClient;
+  }
 }
