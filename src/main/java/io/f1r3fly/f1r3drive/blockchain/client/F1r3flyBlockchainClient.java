@@ -210,28 +210,28 @@ public class F1r3flyBlockchainClient {
 
       LOGGER.debug("Exploratory deploy code {}. Result {}", rhoCode, deployResponse.getResult());
 
-      if (deployResponse.getResult().getPostBlockDataCount() == 0) {
-        LOGGER.debug(
-            "Exploratory deploy code {}. No data found (empty PostBlockData list)", rhoCode);
-        throw new F1r3DriveError("No data found at channel");
-      }
+      return requireSingleExpression(deployResponse.getResult().getPostBlockDataList());
 
-      LOGGER.debug(
-          "Exploratory deploy code {}. PostBlockData count {}",
-          rhoCode,
-          deployResponse.getResult().getPostBlockDataCount());
-
-      if (deployResponse.getResult().getPostBlockData(0).getExprsCount() == 0) {
-        LOGGER.debug("Exploratory deploy code {}. No expressions found in PostBlockData", rhoCode);
-        throw new F1r3DriveError("No expressions found in data");
-      }
-
-      return deployResponse.getResult().getPostBlockData(0).getExprs(0);
-
+    } catch (io.f1r3fly.f1r3drive.errors.EmptyExploratoryResult e) {
+      throw e;
     } catch (Exception e) {
       LOGGER.warn("failed to deploy exploratory code", e);
       throw new F1r3DriveError("Error deploying exploratory code", e);
     }
+  }
+
+  static RhoTypes.Expr requireSingleExpression(java.util.List<RhoTypes.Par> results) {
+    var expressions = results.stream().flatMap(par -> par.getExprsList().stream()).toList();
+    if (expressions.isEmpty()) {
+      throw new io.f1r3fly.f1r3drive.errors.EmptyExploratoryResult();
+    }
+    if (expressions.size() != 1) {
+      throw new F1r3DriveError(
+          "Ambiguous filesystem channel: expected one record, received "
+              + expressions.size()
+              + "; repair duplicate directory metadata before mounting");
+    }
+    return expressions.get(0);
   }
 
   public void deploy(String rhoCode, String language, byte[] signingKey, long timestamp)

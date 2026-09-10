@@ -192,9 +192,13 @@ public class LockedWalletDirectory extends AbstractLocalPath implements ReadOnly
     } catch (NoDataByPath e) {
       logger.info("No data found for path: {}", absolutePath);
       throw e;
-    } catch (io.f1r3fly.f1r3drive.errors.F1r3DriveError e) {
+    } catch (io.f1r3fly.f1r3drive.errors.EmptyExploratoryResult e) {
       logger.info("No data found for path: {}", absolutePath);
       throw new NoDataByPath(absolutePath, "", e);
+    } catch (io.f1r3fly.f1r3drive.errors.F1r3DriveError e) {
+      // A failed read must never be interpreted as permission to initialize an
+      // empty wallet root over an existing filesystem.
+      throw e;
     } catch (Throwable e) {
       logger.error("Error fetching directory from shard for path: {}", absolutePath, e);
       throw new RuntimeException("Failed to fetch directory data for " + absolutePath, e);
