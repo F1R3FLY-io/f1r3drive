@@ -114,6 +114,19 @@ public class BlockchainDirectory extends AbstractDeployablePath implements Direc
 
   @Override
   public synchronized void mkdir(String lastComponent) throws OperationNotPermitted {
+    String childPath = getAbsolutePath() + "/" + lastComponent;
+    try {
+      getBlockchainContext()
+          .getDeployDispatcher()
+          .getBlockchainClient()
+          .exploratoryDeploy(RholangExpressionConstructor.readFromChannel(childPath));
+      throw new io.f1r3fly.f1r3drive.errors.F1r3DriveError(
+          "Directory already exists on-chain but is missing from the mounted parent: "
+              + childPath
+              + "; repair its parent reference before writing");
+    } catch (io.f1r3fly.f1r3drive.errors.EmptyExploratoryResult absent) {
+      // Only a successful empty read permits creating a new directory channel.
+    }
     BlockchainDirectory newDir =
         new BlockchainDirectory(getBlockchainContext(), lastComponent, this, true);
     addChild(newDir);
