@@ -56,13 +56,18 @@ public class DeployDispatcher {
     }
 
     private boolean deployWithRetries(Deployment deployment) {
+      F1r3flyBlockchainClient.PreparedDeployment prepared = null;
       for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         try {
-          f1R3FlyBlockchainClient.deploy(
-              deployment.rhoOrMettaExpression,
-              deployment.language,
-              deployment.signingKey,
-              deployment.timestamp);
+          if (prepared == null) {
+            prepared =
+                f1R3FlyBlockchainClient.prepareDeployment(
+                    deployment.rhoOrMettaExpression,
+                    deployment.language,
+                    deployment.signingKey,
+                    deployment.timestamp);
+          }
+          f1R3FlyBlockchainClient.deploy(prepared, attempt > 0);
           deployment.affectedRevAddresses.stream()
               .map(StateChangeEvents.WalletBalanceChanged::new)
               .forEach(stateChangeEventsManager::addEvent);

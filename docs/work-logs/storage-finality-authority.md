@@ -1,0 +1,9 @@
+# Confirm filesystem writes on the validator
+
+A storage deploy finalized on the validator, but the observer continued reporting its block as unfinalized. The filesystem's synchronous flush consequently held the backend in a kernel FUSE wait, including during shutdown. The observer's lag must not control confirmation of a write submitted to the validator.
+
+Use the validator connection for deployment inclusion and finalization, including retry recognition. Keep exploratory reads on the observer, which supports their read-only execution. Preserve the signed deployment identity, bounded polling deadline and synchronous durability barrier.
+
+Acceptance: an RPC-level test with separate validator and observer endpoints proves that both initial submission and retry await validator finality without contacting the observer. Run the complete unit suite and build the shaded JAR before reloading the mount. Confirm the blocked deployment, remount and backend recovery against the existing chain.
+
+Status: implemented. All 116 unit tests, including the two RPC-level finality cases, and the shaded JAR build passed. The live incident also exposed a Unicode string-slicing panic in the node; that correction passed all 115 interpreter tests and a production build. The observer was restored from a stopped validator snapshot with its previous data retained. The interrupted encrypted observation was recovered from its retained filesystem cache and was reconciled with exact preflight checks. Its stored ciphertext and directory membership were verified unchanged except for completion of the interrupted write. The mount has reconstructed its saved directories using the new JAR. Startup readiness passed and both the mount and Embers backend are confirmed active. A new deployed team run is now writing encrypted continuations through the restored mount; complete demo acceptance remains in progress.

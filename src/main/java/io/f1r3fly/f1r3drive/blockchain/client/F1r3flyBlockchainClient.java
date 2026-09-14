@@ -22,6 +22,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.Security;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,6 +74,17 @@ public class F1r3flyBlockchainClient {
             .withMaxInboundMessageSize(MAX_MESSAGE_SIZE)
             .withMaxOutboundMessageSize(MAX_MESSAGE_SIZE);
 
+    this.manualPropose = manualPropose;
+  }
+
+  F1r3flyBlockchainClient(
+      DeployServiceGrpc.DeployServiceBlockingStub validatorDeployService,
+      ProposeServiceGrpc.ProposeServiceBlockingStub validatorProposeService,
+      DeployServiceGrpc.DeployServiceBlockingStub observerDeployService,
+      boolean manualPropose) {
+    this.validatorDeployService = validatorDeployService;
+    this.validatorProposeService = validatorProposeService;
+    this.observerDeployService = observerDeployService;
     this.manualPropose = manualPropose;
   }
 
@@ -234,8 +246,14 @@ public class F1r3flyBlockchainClient {
     return expressions.get(0);
   }
 
-  public void deploy(String rhoCode, String language, byte[] signingKey, long timestamp)
-      throws F1r3flyDeployError {
+  public record PreparedDeployment(String rhoCode, CasperMessage.DeployDataProto signed) {}
+
+  public void deploy(String rhoCode, String language, byte[] signingKey, long timestamp) {
+    deploy(prepareDeployment(rhoCode, language, signingKey, timestamp), false);
+  }
+
+  public PreparedDeployment prepareDeployment(
+      String rhoCode, String language, byte[] signingKey, long timestamp) {
     try {
 
       int maxRholangInLogs = 2000;
@@ -266,6 +284,37 @@ public class F1r3flyBlockchainClient {
       // Sign deployment
       CasperMessage.DeployDataProto signed = signDeploy(deployment, signingKey);
 
+      return new PreparedDeployment(rhoCode, signed);
+    } catch (Exception error) {
+      throw new F1r3flyDeployError(rhoCode, "Failed to prepare deployment", error);
+    }
+  }
+
+  public void deploy(PreparedDeployment prepared, boolean retry) throws F1r3flyDeployError {
+    String rhoCode = prepared.rhoCode();
+    CasperMessage.DeployDataProto signed = prepared.signed();
+    try {
+      String expectedId = Hex.encode(signed.getSig().toByteArray());
+      // A lost response does not mean the mutation failed. Retry the same
+      // signed payload, and resume finality observation if it was included.
+      if (retry) {
+        try {
+          DeployServiceV1.FindDeployResponse existing =
+              validatorDeployService
+                  .withDeadlineAfter(5, TimeUnit.SECONDS)
+                  .findDeploy(
+                      DeployServiceCommon.FindDeployQuery.newBuilder()
+                          .setDeployId(signed.getSig())
+                          .build());
+          if (!existing.hasError() && !existing.getBlockInfo().getBlockHash().isBlank()) {
+            if (manualPropose) waitForFinalization(expectedId, rhoCode);
+            return;
+          }
+        } catch (StatusRuntimeException unavailable) {
+          LOGGER.debug(
+              "Could not check prior inclusion; retaining original deploy identity", unavailable);
+        }
+      }
       // Deploy
       DeployServiceV1.DeployResponse deployResponse = validatorDeployService.doDeploy(signed);
       if (deployResponse.hasError()) {
@@ -317,21 +366,23 @@ public class F1r3flyBlockchainClient {
     ByteString deployIdBytes = ByteString.copyFrom(Hex.decode(deployId));
     long deadline = System.nanoTime() + FINALIZATION_TIMEOUT.toNanos();
     String blockHash = null;
-    String lastObservation = "deploy has not appeared on the observer";
+    String lastObservation = "deploy has not appeared on the validator";
 
     while (System.nanoTime() < deadline) {
       if (blockHash == null) {
         try {
           DeployServiceV1.FindDeployResponse findResponse =
-              observerDeployService.findDeploy(
-                  DeployServiceCommon.FindDeployQuery.newBuilder()
-                      .setDeployId(deployIdBytes)
-                      .build());
+              validatorDeployService
+                  .withDeadlineAfter(5, TimeUnit.SECONDS)
+                  .findDeploy(
+                      DeployServiceCommon.FindDeployQuery.newBuilder()
+                          .setDeployId(deployIdBytes)
+                          .build());
           if (findResponse.hasError()) {
             lastObservation = gatherErrors(findResponse.getError());
           } else if (!findResponse.getBlockInfo().getBlockHash().isBlank()) {
             blockHash = findResponse.getBlockInfo().getBlockHash();
-            LOGGER.debug("Deploy {} included in observer block {}", deployId, blockHash);
+            LOGGER.debug("Deploy {} included in validator block {}", deployId, blockHash);
           }
         } catch (StatusRuntimeException error) {
           lastObservation = error.getStatus().toString();
@@ -341,8 +392,10 @@ public class F1r3flyBlockchainClient {
       if (blockHash != null) {
         try {
           DeployServiceV1.IsFinalizedResponse finalizedResponse =
-              observerDeployService.isFinalized(
-                  DeployServiceCommon.IsFinalizedQuery.newBuilder().setHash(blockHash).build());
+              validatorDeployService
+                  .withDeadlineAfter(5, TimeUnit.SECONDS)
+                  .isFinalized(
+                      DeployServiceCommon.IsFinalizedQuery.newBuilder().setHash(blockHash).build());
           LOGGER.debug("isFinalizedResponse {}", finalizedResponse);
           if (finalizedResponse.hasError()) {
             lastObservation = gatherErrors(finalizedResponse.getError());

@@ -4,9 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import casper.CasperMessage;
 import io.f1r3fly.f1r3drive.background.state.StateChangeEvents;
 import io.f1r3fly.f1r3drive.background.state.StateChangeEventsManager;
 import java.time.Duration;
@@ -22,6 +26,10 @@ class DeployDispatcherTest {
   void durabilityWaitDoesNotReturnWhileDequeuedDeploymentIsInFlight() throws Exception {
     F1r3flyBlockchainClient client = mock(F1r3flyBlockchainClient.class);
     StateChangeEventsManager events = mock(StateChangeEventsManager.class);
+    var prepared =
+        new F1r3flyBlockchainClient.PreparedDeployment(
+            "@0!(0)", CasperMessage.DeployDataProto.getDefaultInstance());
+    when(client.prepareDeployment(any(), any(), any(), anyLong())).thenReturn(prepared);
     CountDownLatch deployStarted = new CountDownLatch(1);
     CountDownLatch allowDeployToFinish = new CountDownLatch(1);
 
@@ -34,7 +42,7 @@ class DeployDispatcherTest {
               return null;
             })
         .when(client)
-        .deploy(any(), any(), any(), anyLong());
+        .deploy(prepared, false);
 
     DeployDispatcher dispatcher = new DeployDispatcher(client, events);
     dispatcher.enqueueDeploy(
@@ -58,6 +66,34 @@ class DeployDispatcherTest {
       verify(events).addEvent(new StateChangeEvents.WalletBalanceChanged("receiver-rev"));
     } finally {
       allowDeployToFinish.countDown();
+      dispatcher.destroy();
+    }
+  }
+
+  @Test
+  void retryKeepsTheSameSignedDeploymentInsteadOfCreatingAnotherMutation() throws Exception {
+    F1r3flyBlockchainClient client = mock(F1r3flyBlockchainClient.class);
+    StateChangeEventsManager events = mock(StateChangeEventsManager.class);
+    var prepared =
+        new F1r3flyBlockchainClient.PreparedDeployment(
+            "@0!(0)", CasperMessage.DeployDataProto.getDefaultInstance());
+    when(client.prepareDeployment(any(), any(), any(), anyLong())).thenReturn(prepared);
+    doThrow(new IllegalStateException("connection closed after acceptance"))
+        .doNothing()
+        .when(client)
+        .deploy(prepared, false);
+    DeployDispatcher dispatcher = new DeployDispatcher(client, events);
+    dispatcher.enqueueDeploy(
+        new DeployDispatcher.Deployment(
+            "@0!(0)", "rholang", Set.of("sender-rev"), new byte[32], 1L));
+    dispatcher.startBackgroundDeploy();
+    try {
+      CompletableFuture.runAsync(dispatcher::waitOnEmptyQueue).get(20, TimeUnit.SECONDS);
+      verify(client, times(1)).prepareDeployment(any(), any(), any(), anyLong());
+      verify(client, times(1)).deploy(prepared, false);
+      verify(client, times(1)).deploy(prepared, true);
+      verify(events, times(1)).addEvent(new StateChangeEvents.WalletBalanceChanged("sender-rev"));
+    } finally {
       dispatcher.destroy();
     }
   }
